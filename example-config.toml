@@ -1,0 +1,2 @@
+database_url = "/opt/data/db.sqlite"
+user_agent = "VailGrafanaScraper v/1.0 (contact info here)"

@@ -5,6 +5,7 @@ from .errors import ConfigLoadError
 
 class Config(BaseModel):
     database_url: str
+    user_agent: str
 
 def load_config() -> Config:
     try:

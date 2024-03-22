@@ -69,7 +69,7 @@ async def main() -> None:
     await do_migrations(database)
 
     app[app_keys.DATABASE] = database
-    app[app_keys.SCRAPER] = VailScraper(database)
+    app[app_keys.SCRAPER] = VailScraper(database, config.user_agent)
     asyncio.create_task(app[app_keys.SCRAPER].run())
     await web._run_app(app, host="0.0.0.0", port=8000)
 

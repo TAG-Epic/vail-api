@@ -12,10 +12,10 @@ from .models import ScoreLeaderboardPage, ScoreLeaderboardPlayer
 _logger = getLogger(__name__)
 
 class VailScraper:
-    def __init__(self, database: aiosqlite.Connection) -> None:
+    def __init__(self, database: aiosqlite.Connection, user_agent: str) -> None:
         self._session: ClientSession = ClientSession(
             headers={
-                "User-Agent": "VailGrafanaScraper v/1.0 (contact 429ratelimited on discord if shit spams too much)",
+                "User-Agent": user_agent,
                 "Bot": "true"
             },
             base_url="https://aexlab.com"
