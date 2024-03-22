@@ -9,21 +9,27 @@ _logger = getLogger(__name__)
 
 MIGRATIONS: list[BaseMigration] = [
     CreateUsersTableMigration(),
-    CreateStatsTableMigration()
+    CreateStatsTableMigration(),
 ]
+
 
 async def do_migrations(connection: aiosqlite.Connection) -> None:
     # Hard coded init migration
-    await connection.execute("create table if not exists migrations (migration_id text primary key)")
+    await connection.execute(
+        "create table if not exists migrations (migration_id text primary key)"
+    )
 
     for migration in MIGRATIONS:
         migration_id = migration.migration_id
 
-        result = await connection.execute("select migration_id from migrations where migration_id = ?", [migration_id])
+        result = await connection.execute(
+            "select migration_id from migrations where migration_id = ?", [migration_id]
+        )
         row = await result.fetchone()
         if row is None:
             _logger.info("running migration %s", migration_id)
             await migration.upgrade(connection)
-            await connection.execute("insert into migrations (migration_id) values (?)", [migration_id])
+            await connection.execute(
+                "insert into migrations (migration_id) values (?)", [migration_id]
+            )
             await connection.commit()
-

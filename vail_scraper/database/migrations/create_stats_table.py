@@ -1,13 +1,16 @@
 import aiosqlite
 
 from .base import BaseMigration
+
+
 class CreateStatsTableMigration(BaseMigration):
     @property
     def migration_id(self) -> str:
         return "create-stats-table"
 
     async def upgrade(self, connection: aiosqlite.Connection) -> None:
-        await connection.execute("""
+        await connection.execute(
+            """
             create table stats (
                 id text primary key,
                 won integer not null,
@@ -22,4 +25,5 @@ class CreateStatsTableMigration(BaseMigration):
 
                 foreign key (id) references users(id)
             )
-         """)
+         """
+        )

@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod, abstractproperty
 
 import aiosqlite
 
+
 class BaseMigration(ABC):
     @abstractproperty
     def migration_id(self) -> str:

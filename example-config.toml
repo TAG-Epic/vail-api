@@ -1,2 +1,6 @@
 database_url = "/opt/data/db.sqlite"
 user_agent = "VailGrafanaScraper v/1.0 (contact info here)"
+
+[rate_limiter]
+times = 2
+per = 3
