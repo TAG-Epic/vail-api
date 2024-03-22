@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - 10001:8000
+      - 10002:8000
 
     volumes:
       - vail_scraper:/opt/data
