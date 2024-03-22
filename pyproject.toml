@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "vail-scraper"
+version = "0.1.0"
+description = ""
+authors = ["TAG-Epic <tagepicuwu@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+aiohttp = "^3.9.3"
+nextcore = "^2.0.2"
+aiosqlite = "^0.20.0"
+pydantic = "^2.6.4"
+toml = "^0.10.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

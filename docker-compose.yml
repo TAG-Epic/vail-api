@@ -1,0 +1,15 @@
+version: "3"
+
+services:
+  vail-scraper:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 10001:8000
+
+    volumes:
+      - vail_scraper:/opt/data
+
+volumes:
+  vail_scraper:
