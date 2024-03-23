@@ -30,13 +30,7 @@ async def get_metrics(request: web.Request) -> web.Response:
     total_users = row[0]
     lines.append(f"scraper_users_found {total_users}")
 
-    result = await database.execute(
-        "select count(*) from users where last_scraped < ?", [scraper.last_scrape_at]
-    )
-    row = await result.fetchone()
-    assert row is not None
-    users_outdated = row[0]
-    lines.append(f"scraper_users_outdated {users_outdated}")
+    lines.append(f"scraper_users_outdated {scraper.users_failed_scrape}")
 
     lines.append(f"scraper_last_scrape_duration {scraper.last_scrape_duration}")
 
