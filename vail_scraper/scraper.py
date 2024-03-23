@@ -77,7 +77,6 @@ class VailScraper:
 
             page_id += 1
 
-        self.last_scrape_at = time.time()
         result = await self._database.execute(
             "select id, name from users where last_scraped < ?", [self.last_scrape_at]
         )
@@ -87,6 +86,7 @@ class VailScraper:
             _logger.warn("%s users failed to fetch", self.users_failed_scrape)
             _logger.warn("failed to fetch %s", ", ".join([row[1] for row in rows]))
 
+        self.last_scrape_at = time.time()
         self.last_scrape_duration = self.last_scrape_at - self.started_scraping_at
         _logger.info("scrape took %s seconds", self.last_scrape_duration)
 
