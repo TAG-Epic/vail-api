@@ -17,8 +17,19 @@ routes = web.RouteTableDef()
 app = web.Application()
 
 
+@routes.get("/db.sqlite")
+async def download_db(request: web.Request) -> web.StreamResponse:
+    del request
+    config = app[app_keys.CONFIG]
+    
+    if config.database_url != ":memory:":
+        return web.FileResponse(config.database_url)
+    
+    return web.json_response({"detail": "in-memory db cannot be shared"}, status=500)
+
 @routes.get("/metrics")
 async def get_metrics(request: web.Request) -> web.Response:
+    del request
     lines = []
     database = app[app_keys.DATABASE]
     scraper = app[app_keys.SCRAPER]
@@ -85,7 +96,8 @@ async def main() -> None:
     database = await aiosqlite.connect(config.database_url)
     _logger.info("doing migrations")
     await do_migrations(database)
-
+    
+    app[app_keys.CONFIG] = config
     app[app_keys.DATABASE] = database
     app[app_keys.SCRAPER] = VailScraper(database, config)
     asyncio.create_task(app[app_keys.SCRAPER].run())
