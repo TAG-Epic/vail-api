@@ -44,7 +44,7 @@ class VailScraper:
                 continue
             except:
                 _logger.exception("failed to fetch page")
-                exit()
+                continue
             _logger.debug("scraped %s users (page %s)", len(page), page_id)
 
             if len(page) == 0:
