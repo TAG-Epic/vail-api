@@ -4,12 +4,14 @@ from logging import getLogger
 from .migrations.base import BaseMigration
 from .migrations.create_users_table import CreateUsersTableMigration
 from .migrations.create_stats_table import CreateStatsTableMigration
+from .migrations.add_cto_scores import AddCTOScoresMigration
 
 _logger = getLogger(__name__)
 
 MIGRATIONS: list[BaseMigration] = [
     CreateUsersTableMigration(),
     CreateStatsTableMigration(),
+    AddCTOScoresMigration()
 ]
 
 

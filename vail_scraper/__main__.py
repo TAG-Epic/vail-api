@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from urllib.parse import quote
 
 import aiosqlite
 from aiohttp import web
@@ -10,6 +9,7 @@ from .config import load_config
 from .database.migration_manager import do_migrations
 from . import app_keys
 from .scraper import VailScraper
+from .prometheus import escape_prometheus
 
 logging.basicConfig(level=logging.DEBUG)
 _logger = logging.getLogger(__name__)
@@ -49,45 +49,69 @@ async def get_metrics(request: web.Request) -> web.Response:
 
     lines.append(f"scraper_last_scrape_duration {scraper.last_scrape_duration}")
 
-    # Wins
+    # General stats 
     result = await database.execute(
         """
         select
-            users.id, name, won, lost, draws, abandoned, kills, assists, deaths, points, game_hours
-            from stats
-            join users on users.id = stats.id
+            users.id, name, won, lost, draws, abandoned, kills, assists, deaths, game_hours
+            from general_stats
+            join users on users.id = general_stats.id
     """
     )
     rows = await result.fetchall()
 
     for row in rows:
         lines.append(
-            f'stats_wins{{id="{quote(row[0])}", name="{quote(row[1])}"}} {row[2]}'
+            f'stats_wins{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}} {row[2]}'
         )
         lines.append(
-            f'stats_losses{{id="{quote(row[0])}", name="{quote(row[1])}"}} {row[3]}'
+            f'stats_losses{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}} {row[3]}'
         )
         lines.append(
-            f'stats_draws{{id="{quote(row[0])}", name="{quote(row[1])}"}} {row[4]}'
+            f'stats_draws{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}} {row[4]}'
         )
         lines.append(
-            f'stats_abandoned{{id="{quote(row[0])}", name="{quote(row[1])}"}} {row[5]}'
+            f'stats_abandoned{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}} {row[5]}'
         )
         lines.append(
-            f'stats_kills{{id="{quote(row[0])}", name="{quote(row[1])}"}} {row[6]}'
+            f'stats_kills{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}} {row[6]}'
         )
         lines.append(
-            f'stats_assists{{id="{quote(row[0])}", name="{quote(row[1])}"}} {row[7]}'
+            f'stats_assists{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}} {row[7]}'
         )
         lines.append(
-            f'stats_deaths{{id="{quote(row[0])}", name="{quote(row[1])}"}} {row[8]}'
+            f'stats_deaths{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}} {row[8]}'
         )
         lines.append(
-            f'stats_points{{id="{quote(row[0])}", name="{quote(row[1])}"}} {row[9]}'
+            f'stats_game_hours{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}} {row[9]}'
         )
-        lines.append(
-            f'stats_game_hours{{id="{quote(row[0])}", name="{quote(row[1])}"}} {row[10]}'
-        )
+
+    result = await database.execute(
+        """
+        select users.id, name, xp from xp_stats join users on users.id = xp_stats.id
+        """
+    )
+    rows = await result.fetchall()
+    for row in rows:
+        lines.append(f'stats_xp{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}}')
+
+    result = await database.execute(
+        """
+        select users.id, name, steals from cto_steal_stats join users on users.id = cto_steal_stats.id
+        """
+    )
+    rows = await result.fetchall()
+    for row in rows:
+        lines.append(f'stats_cto_steals{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}} {row[2]}')
+
+    result = await database.execute(
+        """
+        select users.id, name, recovers from cto_recover_stats join users on users.id = cto_recover_stats.id
+        """
+    )
+    rows = await result.fetchall()
+    for row in rows:
+        lines.append(f'stats_cto_recovers{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}} {row[2]}')
     return web.Response(text="\n".join(lines))
 
 

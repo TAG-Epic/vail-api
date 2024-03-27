@@ -25,22 +25,55 @@ class VailScraper:
         )
         self._database: aiosqlite.Connection = database
         self._database_lock: ExclusiveLock = database_lock
-        self.started_scraping_at: float = time.time()
         self.last_scrape_at: float = time.time()
         self.users_failed_scrape: int = 0
         self.last_scrape_duration: float = 0
 
     async def run(self) -> None:
         while True:
-            await self._tick()
+            started_scraping_at = time.time()
+            await self._scrape_xp_stats()
+            await self._scrape_cto_steals()
+            await self._scrape_cto_recovers()
+            
+            # Scraping stats
+            ended_scraping_at = time.time()
+            self.last_scrape_duration = ended_scraping_at - started_scraping_at
 
-    async def _tick(self) -> None:
-        self.started_scraping_at = time.time()
+            # Check how many users are outdated
+            outdated_user_ids: set[str] = set()
 
+
+            # General stats
+            result = await self._database.execute("select id from general_stats where last_scraped_at < ?", [started_scraping_at])
+            rows = await result.fetchall()
+            outdated_user_ids.update([row[0] for row in rows])
+            
+            # XP Stats
+            result = await self._database.execute("select id from xp_stats where last_scraped_at < ?", [started_scraping_at])
+            rows = await result.fetchall()
+            outdated_user_ids.update([row[0] for row in rows])
+            
+            # CTO steals
+            result = await self._database.execute("select id from cto_steal_stats where last_scraped_at < ?", [started_scraping_at])
+            rows = await result.fetchall()
+            outdated_user_ids.update([row[0] for row in rows])
+
+            # CTO recovers
+            result = await self._database.execute("select id from cto_recover_stats where last_scraped_at < ?", [started_scraping_at])
+            rows = await result.fetchall()
+            outdated_user_ids.update([row[0] for row in rows])
+            
+            self.users_failed_scrape = len(outdated_user_ids)
+
+
+
+
+    async def _scrape_xp_stats(self) -> None:
         page_id = 0
         while True:
             try:
-                page = await self.get_page(page_id)
+                page = await self.get_leaderboard_page(page_id)
             except NoContentPageBug:
                 _logger.error("no content page bug!")
                 page_id += 1
@@ -56,11 +89,11 @@ class VailScraper:
             paged_scraped_at = time.time()
             async with self._database_lock.shared():
                 await self._database.executemany(
-                    "insert or replace into users (id, name, last_scraped) values (?, ?, ?)",
-                    [(user.user_id, user.display_name, paged_scraped_at) for user in page],
+                    "insert or replace into users (id, name) values (?, ?)",
+                    [(user.user_id, user.display_name) for user in page],
                 )
                 await self._database.executemany(
-                    "insert or replace into stats (id, won, lost, draws, abandoned, kills, assists, deaths, points, game_hours) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    "insert or replace into general_stats (id, won, lost, draws, abandoned, kills, assists, deaths, game_hours, last_scraped_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     [
                         (
                             user.user_id,
@@ -71,31 +104,144 @@ class VailScraper:
                             user.stats.kills,
                             user.stats.assists,
                             user.stats.deaths,
-                            user.stats.point,
                             user.stats.game_hours,
+                            paged_scraped_at
                         )
                         for user in page
                     ],
+                )
+                await self._database.executemany(
+                    "insert or replace into xp_stats (id, xp, last_scraped_at) values (?, ?, ?)",
+                    [
+                        (
+                            user.user_id,
+                            user.stats.point,
+                            paged_scraped_at
+                        )
+                        for user in page
+                    ]
                 )
                 await self._database.commit()
 
             page_id += 1
 
-        result = await self._database.execute(
-            "select id, name from users where last_scraped < ?", [self.last_scrape_at]
-        )
-        rows = list(await result.fetchall())
-        self.users_failed_scrape = len(rows)
-        if self.users_failed_scrape > 0:
-            _logger.warn("%s users failed to fetch", self.users_failed_scrape)
-            _logger.warn("failed to fetch %s", ", ".join([row[1] for row in rows]))
+    async def _scrape_cto_steals(self) -> None:
+        page_id = 0
+        while True:
+            try:
+                page = await self.get_leaderboard_page(page_id, point="cto-steals")
+            except NoContentPageBug:
+                _logger.error("no content page bug!")
+                page_id += 1
+                continue
+            except:
+                _logger.exception("failed to fetch page")
+                continue
+            _logger.debug("scraped %s users (page %s)", len(page), page_id)
 
-        self.last_scrape_at = time.time()
-        self.last_scrape_duration = self.last_scrape_at - self.started_scraping_at
-        _logger.info("scrape took %s seconds", self.last_scrape_duration)
+            if len(page) == 0:
+                break
 
-    async def get_page(
-        self, page_id: int, page_size: int = 100
+            paged_scraped_at = time.time()
+            async with self._database_lock.shared():
+                await self._database.executemany(
+                    "insert or replace into users (id, name) values (?, ?)",
+                    [(user.user_id, user.display_name) for user in page],
+                )
+                await self._database.executemany(
+                    "insert or replace into general_stats (id, won, lost, draws, abandoned, kills, assists, deaths, game_hours, last_scraped_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    [
+                        (
+                            user.user_id,
+                            user.stats.won,
+                            user.stats.lost,
+                            user.stats.draws,
+                            user.stats.abandoned,
+                            user.stats.kills,
+                            user.stats.assists,
+                            user.stats.deaths,
+                            user.stats.game_hours,
+                            paged_scraped_at
+                        )
+                        for user in page
+                    ],
+                )
+                await self._database.executemany(
+                    "insert or replace into cto_steal_stats (id, steals, last_scraped_at) values (?, ?, ?)",
+                    [
+                        (
+                            user.user_id,
+                            user.stats.point,
+                            paged_scraped_at
+                        )
+                        for user in page
+                    ]
+                )
+                await self._database.commit()
+
+            page_id += 1
+
+    async def _scrape_cto_recovers(self) -> None:
+        page_id = 0
+        while True:
+            try:
+                page = await self.get_leaderboard_page(page_id, point="cto-recovers")
+            except NoContentPageBug:
+                _logger.error("no content page bug!")
+                page_id += 1
+                continue
+            except:
+                _logger.exception("failed to fetch page")
+                continue
+            _logger.debug("scraped %s users (page %s)", len(page), page_id)
+
+            if len(page) == 0:
+                break
+
+            paged_scraped_at = time.time()
+            async with self._database_lock.shared():
+                await self._database.executemany(
+                    "insert or replace into users (id, name) values (?, ?)",
+                    [(user.user_id, user.display_name) for user in page],
+                )
+                await self._database.executemany(
+                    "insert or replace into general_stats (id, won, lost, draws, abandoned, kills, assists, deaths, game_hours, last_scraped_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    [
+                        (
+                            user.user_id,
+                            user.stats.won,
+                            user.stats.lost,
+                            user.stats.draws,
+                            user.stats.abandoned,
+                            user.stats.kills,
+                            user.stats.assists,
+                            user.stats.deaths,
+                            user.stats.game_hours,
+                            paged_scraped_at
+                        )
+                        for user in page
+                    ],
+                )
+                await self._database.executemany(
+                    "insert or replace into cto_recover_stats (id, recovers, last_scraped_at) values (?, ?, ?)",
+                    [
+                        (
+                            user.user_id,
+                            user.stats.point,
+                            paged_scraped_at
+                        )
+                        for user in page
+                    ]
+                )
+                await self._database.commit()
+
+            page_id += 1
+
+
+
+
+    async def get_leaderboard_page(
+            self, page_id: int, *, page_size: int = 100, point: typing.Literal["score", "wins", "kills", "cto-steals", "game-seconds", "cto-recovers"] = "score"
     ) -> list[ScoreLeaderboardPlayer]:
         error: Exception | None = None
         for retry_attempt in range(5):
@@ -105,7 +251,7 @@ class VailScraper:
                     response = await self._session.get(
                         "/api/leaderboard",
                         params={
-                            "leaderboardCode": "score",
+                            "leaderboardCode": point,
                             "page": page_id + 1,
                             "pageLimit": page_size,
                         },
