@@ -5,6 +5,7 @@ from urllib.parse import quote
 import aiosqlite
 from aiohttp import web
 
+from .asynk import ExclusiveLock
 from .config import load_config
 from .database.migration_manager import do_migrations
 from . import app_keys
@@ -19,11 +20,14 @@ app = web.Application()
 
 @routes.get("/db.sqlite")
 async def download_db(request: web.Request) -> web.StreamResponse:
-    del request
     config = app[app_keys.CONFIG]
+    database_lock = app[app_keys.DATABASE_LOCK]
     
     if config.database_url != ":memory:":
-        return web.FileResponse(config.database_url)
+        async with database_lock.exclusive():
+            response = web.FileResponse(config.database_url)
+            await response.prepare(request)
+            return response
     
     return web.json_response({"detail": "in-memory db cannot be shared"}, status=500)
 
@@ -92,6 +96,7 @@ app.add_routes(routes)
 
 async def main() -> None:
     config = load_config()
+    database_lock = ExclusiveLock()
 
     database = await aiosqlite.connect(config.database_url)
     _logger.info("doing migrations")
@@ -99,7 +104,8 @@ async def main() -> None:
     
     app[app_keys.CONFIG] = config
     app[app_keys.DATABASE] = database
-    app[app_keys.SCRAPER] = VailScraper(database, config)
+    app[app_keys.SCRAPER] = VailScraper(database, database_lock, config)
+    app[app_keys.DATABASE_LOCK] = database_lock
     asyncio.create_task(app[app_keys.SCRAPER].run())
     await web._run_app(app, host="0.0.0.0", port=8000)
 

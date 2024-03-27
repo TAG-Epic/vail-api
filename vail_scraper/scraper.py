@@ -5,6 +5,8 @@ import time
 from aiohttp import ClientSession
 from nextcore.common.times_per import TimesPer
 
+from vail_scraper.asynk import ExclusiveLock
+
 from .config import Config
 from .errors import NoContentPageBug
 from .models import ScoreLeaderboardPage, ScoreLeaderboardPlayer
@@ -13,7 +15,7 @@ _logger = getLogger(__name__)
 
 
 class VailScraper:
-    def __init__(self, database: aiosqlite.Connection, config: Config) -> None:
+    def __init__(self, database: aiosqlite.Connection, database_lock: ExclusiveLock, config: Config) -> None:
         self._session: ClientSession = ClientSession(
             headers={"User-Agent": config.user_agent, "Bot": "true"},
             base_url="https://aexlab.com",
@@ -22,6 +24,7 @@ class VailScraper:
             config.rate_limiter.times, config.rate_limiter.per
         )
         self._database: aiosqlite.Connection = database
+        self._database_lock: ExclusiveLock = database_lock
         self.started_scraping_at: float = time.time()
         self.last_scrape_at: float = time.time()
         self.users_failed_scrape: int = 0
@@ -51,29 +54,30 @@ class VailScraper:
                 break
 
             paged_scraped_at = time.time()
-            await self._database.executemany(
-                "insert or replace into users (id, name, last_scraped) values (?, ?, ?)",
-                [(user.user_id, user.display_name, paged_scraped_at) for user in page],
-            )
-            await self._database.executemany(
-                "insert or replace into stats (id, won, lost, draws, abandoned, kills, assists, deaths, points, game_hours) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                [
-                    (
-                        user.user_id,
-                        user.stats.won,
-                        user.stats.lost,
-                        user.stats.draws,
-                        user.stats.abandoned,
-                        user.stats.kills,
-                        user.stats.assists,
-                        user.stats.deaths,
-                        user.stats.point,
-                        user.stats.game_hours,
-                    )
-                    for user in page
-                ],
-            )
-            await self._database.commit()
+            async with self._database_lock.shared():
+                await self._database.executemany(
+                    "insert or replace into users (id, name, last_scraped) values (?, ?, ?)",
+                    [(user.user_id, user.display_name, paged_scraped_at) for user in page],
+                )
+                await self._database.executemany(
+                    "insert or replace into stats (id, won, lost, draws, abandoned, kills, assists, deaths, points, game_hours) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    [
+                        (
+                            user.user_id,
+                            user.stats.won,
+                            user.stats.lost,
+                            user.stats.draws,
+                            user.stats.abandoned,
+                            user.stats.kills,
+                            user.stats.assists,
+                            user.stats.deaths,
+                            user.stats.point,
+                            user.stats.game_hours,
+                        )
+                        for user in page
+                    ],
+                )
+                await self._database.commit()
 
             page_id += 1
 
