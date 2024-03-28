@@ -93,7 +93,7 @@ async def get_metrics(request: web.Request) -> web.Response:
     )
     rows = await result.fetchall()
     for row in rows:
-        lines.append(f'stats_xp{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}}')
+        lines.append(f'stats_xp{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}} {row[2]}')
 
     result = await database.execute(
         """

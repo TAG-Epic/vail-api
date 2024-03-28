@@ -11,7 +11,7 @@ class AddCTOScoresMigration(BaseMigration):
     async def upgrade(self, connection: aiosqlite.Connection) -> None:
         # Move last_scraped to per stat table definitions
         await connection.execute("alter table stats rename to general_stats")
-        await connection.execute("alter table general_stats add column last_scraped_at real not null")
+        await connection.execute("alter table general_stats add column last_scraped_at real not null default 0")
         await connection.execute("update general_stats set last_scraped_at = (select last_scraped from users where id = general_stats.id)")
         await connection.execute("alter table users drop column last_scraped")
 
