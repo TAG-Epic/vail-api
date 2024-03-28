@@ -3,7 +3,7 @@ import aiosqlite
 from .base import BaseMigration
 
 
-class CTOScoresMissingPkey(BaseMigration):
+class CTOScoresMissingPKey(BaseMigration):
     @property
     def migration_id(self) -> str:
         return "cto-scores-missing-pkey"

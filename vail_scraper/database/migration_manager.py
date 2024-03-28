@@ -5,6 +5,7 @@ from .migrations.base import BaseMigration
 from .migrations.create_users_table import CreateUsersTableMigration
 from .migrations.create_stats_table import CreateStatsTableMigration
 from .migrations.add_cto_scores import AddCTOScoresMigration
+from .migrations.cto_scores_missing_pkey import CTOScoresMissingPKey
 
 _logger = getLogger(__name__)
 
