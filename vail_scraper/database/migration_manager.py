@@ -12,7 +12,8 @@ _logger = getLogger(__name__)
 MIGRATIONS: list[BaseMigration] = [
     CreateUsersTableMigration(),
     CreateStatsTableMigration(),
-    AddCTOScoresMigration()
+    AddCTOScoresMigration(),
+    CTOScoresMissingPKey()
 ]
 
 
