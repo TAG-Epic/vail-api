@@ -5,6 +5,47 @@ from .. import app_keys
 
 router = web.RouteTableDef()
 
+@router.get("/api/v1/user/search")
+async def search_user(request: web.Request) -> web.StreamResponse:
+    database = request.app[app_keys.DATABASE]
+
+    if "name" not in request.query:
+        return web.json_response({"detail": "missing param name", "code": APIErrorCode.MISSING_QUERY_PARAMETER, "parameter": "query"})
+
+    name = request.query["name"]
+    escaped_name = name.replace("%", "\\%").replace("_", "\\_")
+
+    result = await database.execute(
+        """
+        select id, name
+        from users where
+        name like ? or
+        name like ? or
+        name like ? or
+        name = ?
+        limit 50
+        """,
+        [
+            f"%{escaped_name}%",
+            f"%{escaped_name}",
+            f"{escaped_name}%",
+            name
+        ]
+    )
+    rows = await result.fetchall()
+
+    data = {
+        "items": []
+    }
+
+    for row in rows:
+        data["items"].append({
+            "id": row["id"],
+            "name": row["name"]
+        })
+
+    return web.json_response(data)
+
 @router.get("/api/v1/user/{id}")
 async def get_user(request: web.Request) -> web.StreamResponse:
     database = request.app[app_keys.DATABASE]
@@ -23,6 +64,7 @@ async def get_user(request: web.Request) -> web.StreamResponse:
         "id": request.match_info["id"],
         "name": row["name"]
     })
+
 
 @router.get("/api/v1/user/{id}/stats")
 async def get_stats_for_user(request: web.Request) -> web.StreamResponse:

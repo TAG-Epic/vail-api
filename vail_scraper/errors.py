@@ -12,3 +12,4 @@ class NoContentPageBug(Exception):
 
 class APIErrorCode(StrEnum):
     USER_NOT_FOUND = "user_not_found"
+    MISSING_QUERY_PARAMETER = "missing_query_parameter"
