@@ -1,8 +1,28 @@
 from aiohttp import web
 
+from ..errors import APIErrorCode
 from .. import app_keys
 
 router = web.RouteTableDef()
+
+@router.get("/api/v1/user/{id}")
+async def get_user(request: web.Request) -> web.StreamResponse:
+    database = request.app[app_keys.DATABASE]
+
+    result = await database.execute("select name from users where id = ? limit 1", [request.match_info["id"]])
+    row = await result.fetchone()
+    if row is None:
+        return web.json_response(
+            {
+                "detail": "user not found/not scraped yet",
+                "code": APIErrorCode.USER_NOT_FOUND
+            },
+            status=404
+        )
+    return web.json_response({
+        "id": request.match_info["id"],
+        "name": row["name"]
+    })
 
 @router.get("/api/v1/user/{id}/stats")
 async def get_stats_for_user(request: web.Request) -> web.StreamResponse:
@@ -12,7 +32,7 @@ async def get_stats_for_user(request: web.Request) -> web.StreamResponse:
         """
         select
         users.id, users.name,
-        general_stats.won, general_stats.lost, general_stats.draws, general_stats.draws, general_stats.abandoned, general_stats.kills, general_stats.deaths, general_stats.game_hours, general_stats.last_scraped_at as general_stats_last_scraped_at,
+        general_stats.won, general_stats.lost, general_stats.draws, general_stats.abandoned, general_stats.kills, general_stats.deaths, general_stats.game_hours, general_stats.last_scraped_at as general_stats_last_scraped_at,
         cto_recover_stats.recovers as cto_recovers, cto_recover_stats.last_scraped_at as cto_recover_stats_last_scraped_at,
         cto_steal_stats.steals as cto_steals, cto_steal_stats.last_scraped_at as cto_steal_stats_last_scraped_at
         from users
@@ -20,12 +40,20 @@ async def get_stats_for_user(request: web.Request) -> web.StreamResponse:
         left join cto_recover_stats on users.id = cto_recover_stats.id
         left join cto_steal_stats on users.id = cto_steal_stats.id
         left join xp_stats on users.id = xp_stats.id
+        where users.id = ?
         limit 1
-        """
+        """,
+        [request.match_info["id"]]
     )
     row = await result.fetchone()
     if row is None:
-        return web.json_response({"detail": "user not found/not scraped yet"}, status=404)
+        return web.json_response(
+            {
+                "detail": "user not found/not scraped yet",
+                "code": APIErrorCode.USER_NOT_FOUND
+            },
+            status=404
+        )
 
     data = {}
 
