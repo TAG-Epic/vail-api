@@ -37,7 +37,8 @@ async def main() -> None:
     app[app_keys.DATABASE] = database
     app[app_keys.SCRAPER] = VailScraper(database, database_lock, config)
     app[app_keys.DATABASE_LOCK] = database_lock
-    asyncio.create_task(app[app_keys.SCRAPER].run())
+    if config.scrape:
+        asyncio.create_task(app[app_keys.SCRAPER].run())
     await web._run_app(app, host="0.0.0.0", port=8000)
 
 

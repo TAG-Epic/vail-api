@@ -13,6 +13,7 @@ class Config(BaseModel):
     database_url: str
     user_agent: str
     rate_limiter: RateLimitConfig
+    scrape: bool 
 
 
 def load_config() -> Config:
