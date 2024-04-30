@@ -1,7 +1,7 @@
 import aiosqlite
 from aiohttp.web import AppKey
 
-from .asynk import ExclusiveLock
+from .utils.exclusive_lock import ExclusiveLock
 from .config import Config
 from .scraper import VailScraper
 

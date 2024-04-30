@@ -12,6 +12,7 @@ nextcore = "^2.0.2"
 aiosqlite = "^0.20.0"
 pydantic = "^2.6.4"
 toml = "^0.10.2"
+slowstack = "^1.0.0"
 
 
 [build-system]

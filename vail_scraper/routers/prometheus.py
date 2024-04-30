@@ -1,11 +1,13 @@
 from aiohttp import web
+from slowstack.asynchronous.times_per import TimesPerRateLimiter
 
+from ..utils.rate_limit import rate_limit_http
 from .. import app_keys
-from ..prometheus import escape_prometheus
 
 router = web.RouteTableDef()
 
 @router.get("/metrics")
+@rate_limit_http(lambda: TimesPerRateLimiter(1, 10))
 async def get_metrics(request: web.Request) -> web.Response:
     lines = []
     database = request.app[app_keys.DATABASE]
@@ -86,3 +88,6 @@ async def get_metrics(request: web.Request) -> web.Response:
     for row in rows:
         lines.append(f'stats_cto_recovers{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}} {row[2]}')
     return web.Response(text="\n".join(lines))
+
+def escape_prometheus(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("\"", "\\\"")

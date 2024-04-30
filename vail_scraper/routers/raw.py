@@ -1,10 +1,13 @@
 from aiohttp import web
+from slowstack.asynchronous.times_per import TimesPerRateLimiter
 
+from ..utils.rate_limit import rate_limit_http
 from .. import app_keys
 
 router = web.RouteTableDef()
 
 @router.get("/db.sqlite")
+@rate_limit_http(lambda: TimesPerRateLimiter(6, 60))
 async def download_db(request: web.Request) -> web.StreamResponse:
     config = request.app[app_keys.CONFIG]
     database_lock = request.app[app_keys.DATABASE_LOCK]

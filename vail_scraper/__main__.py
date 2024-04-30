@@ -4,7 +4,7 @@ import logging
 import aiosqlite
 from aiohttp import web
 
-from .asynk import ExclusiveLock
+from .utils.exclusive_lock import ExclusiveLock
 from .config import load_config
 from .database.migration_manager import do_migrations
 from . import app_keys

@@ -5,7 +5,7 @@ from .. import app_keys
 
 router = web.RouteTableDef()
 
-@router.get("/api/v1/user/search")
+@router.get("/api/v1/users/search")
 async def search_user(request: web.Request) -> web.StreamResponse:
     database = request.app[app_keys.DATABASE]
 
@@ -66,7 +66,7 @@ async def get_user(request: web.Request) -> web.StreamResponse:
     })
 
 
-@router.get("/api/v1/user/{id}/stats")
+@router.get("/api/v1/users/{id}/stats")
 async def get_stats_for_user(request: web.Request) -> web.StreamResponse:
     database = request.app[app_keys.DATABASE]
 

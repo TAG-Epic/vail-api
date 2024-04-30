@@ -29,5 +29,3 @@ class ExclusiveLock:
                 yield
             finally:
                 self._read_opened.set()
-        
-

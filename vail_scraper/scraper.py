@@ -5,8 +5,7 @@ import time
 from aiohttp import ClientSession
 from nextcore.common.times_per import TimesPer
 
-from vail_scraper.asynk import ExclusiveLock
-
+from .utils.exclusive_lock import ExclusiveLock
 from .config import Config
 from .errors import NoContentPageBug
 from .models import ScoreLeaderboardPage, ScoreLeaderboardPlayer
