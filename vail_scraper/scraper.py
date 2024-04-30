@@ -3,8 +3,9 @@ import typing
 import aiosqlite
 import time
 from aiohttp import ClientSession
-from nextcore.common.times_per import TimesPer
+from slowstack.asynchronous.times_per import TimesPerRateLimiter
 
+from .utils.circuit_breaker import CircuitBreaker
 from .utils.exclusive_lock import ExclusiveLock
 from .config import Config
 from .errors import NoContentPageBug
@@ -19,9 +20,10 @@ class VailScraper:
             headers={"User-Agent": config.user_agent, "Bot": "true"},
             base_url="https://aexlab.com",
         )
-        self._rate_limiter: TimesPer = TimesPer(
+        self._rate_limiter: TimesPerRateLimiter = TimesPerRateLimiter(
             config.rate_limiter.times, config.rate_limiter.per
         )
+        self.circuit_breaker: CircuitBreaker = CircuitBreaker(5, 10)
         self._database: aiosqlite.Connection = database
         self._database_lock: ExclusiveLock = database_lock
         self.last_scrape_at: float = time.time()
@@ -247,25 +249,27 @@ class VailScraper:
             async with self._rate_limiter.acquire():
                 _logger.debug("fetching page %s", page_id)
                 try:
-                    response = await self._session.get(
-                        "/api/leaderboard",
-                        params={
-                            "leaderboardCode": point,
-                            "page": page_id + 1,
-                            "pageLimit": page_size,
-                        },
-                    )
+                    with self.circuit_breaker:
+                        response = await self._session.get(
+                            "/api/leaderboard",
+                            params={
+                                "leaderboardCode": point,
+                                "page": page_id + 1,
+                                "pageLimit": page_size,
+                            },
+                        )
                 except Exception as error:
                     _logger.exception("failed to fetch page")
                     error = error
                     continue
-            if response.status == 204:
-                _logger.warn("204 page!")
-                raise NoContentPageBug()
-            if not response.ok:
-                _logger.error("failed to parse result: %s", await response.text())
-                response.raise_for_status()
-            data = await response.text()
-            page = ScoreLeaderboardPage.validate_json(data)
-            return page
+            with self.circuit_breaker:
+                if response.status == 204:
+                    _logger.warn("204 page!")
+                    raise NoContentPageBug()
+                if not response.ok:
+                    _logger.error("failed to parse result: %s", await response.text())
+                    response.raise_for_status()
+                data = await response.text()
+                page = ScoreLeaderboardPage.validate_json(data)
+                return page
         raise typing.cast(Exception, error)

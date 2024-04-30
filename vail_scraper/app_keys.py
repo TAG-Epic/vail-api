@@ -1,6 +1,8 @@
 import aiosqlite
 from aiohttp.web import AppKey
 
+from vail_scraper.utils.circuit_breaker import CircuitBreaker
+
 from .utils.exclusive_lock import ExclusiveLock
 from .config import Config
 from .scraper import VailScraper
