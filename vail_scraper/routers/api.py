@@ -44,7 +44,7 @@ async def search_user(request: web.Request) -> web.StreamResponse:
     return web.json_response(data)
 
 
-@router.get("/api/v1/user/{id}")
+@router.get("/api/v1/users/{id}")
 async def get_user(request: web.Request) -> web.StreamResponse:
     database = request.app[app_keys.DATABASE]
 
