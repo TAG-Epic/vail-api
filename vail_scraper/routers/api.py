@@ -5,12 +5,19 @@ from .. import app_keys
 
 router = web.RouteTableDef()
 
+
 @router.get("/api/v1/users/search")
 async def search_user(request: web.Request) -> web.StreamResponse:
     database = request.app[app_keys.DATABASE]
 
     if "name" not in request.query:
-        return web.json_response({"detail": "missing param name", "code": APIErrorCode.MISSING_QUERY_PARAMETER, "parameter": "query"})
+        return web.json_response(
+            {
+                "detail": "missing param name",
+                "code": APIErrorCode.MISSING_QUERY_PARAMETER,
+                "parameter": "query",
+            }
+        )
 
     name = request.query["name"]
     escaped_name = name.replace("%", "\\%").replace("_", "\\_")
@@ -25,45 +32,35 @@ async def search_user(request: web.Request) -> web.StreamResponse:
         name = ?
         limit 50
         """,
-        [
-            f"%{escaped_name}%",
-            f"%{escaped_name}",
-            f"{escaped_name}%",
-            name
-        ]
+        [f"%{escaped_name}%", f"%{escaped_name}", f"{escaped_name}%", name],
     )
     rows = await result.fetchall()
 
-    data = {
-        "items": []
-    }
+    data = {"items": []}
 
     for row in rows:
-        data["items"].append({
-            "id": row["id"],
-            "name": row["name"]
-        })
+        data["items"].append({"id": row["id"], "name": row["name"]})
 
     return web.json_response(data)
+
 
 @router.get("/api/v1/user/{id}")
 async def get_user(request: web.Request) -> web.StreamResponse:
     database = request.app[app_keys.DATABASE]
 
-    result = await database.execute("select name from users where id = ? limit 1", [request.match_info["id"]])
+    result = await database.execute(
+        "select name from users where id = ? limit 1", [request.match_info["id"]]
+    )
     row = await result.fetchone()
     if row is None:
         return web.json_response(
             {
                 "detail": "user not found/not scraped yet",
-                "code": APIErrorCode.USER_NOT_FOUND
+                "code": APIErrorCode.USER_NOT_FOUND,
             },
-            status=404
+            status=404,
         )
-    return web.json_response({
-        "id": request.match_info["id"],
-        "name": row["name"]
-    })
+    return web.json_response({"id": request.match_info["id"], "name": row["name"]})
 
 
 @router.get("/api/v1/users/{id}/stats")
@@ -85,16 +82,16 @@ async def get_stats_for_user(request: web.Request) -> web.StreamResponse:
         where users.id = ?
         limit 1
         """,
-        [request.match_info["id"]]
+        [request.match_info["id"]],
     )
     row = await result.fetchone()
     if row is None:
         return web.json_response(
             {
                 "detail": "user not found/not scraped yet",
-                "code": APIErrorCode.USER_NOT_FOUND
+                "code": APIErrorCode.USER_NOT_FOUND,
             },
-            status=404
+            status=404,
         )
 
     data = {}
@@ -106,15 +103,13 @@ async def get_stats_for_user(request: web.Request) -> web.StreamResponse:
                     "won": row["won"],
                     "lost": row["lost"],
                     "draws": row["draws"],
-                    "abandoned": row["abandoned"]
+                    "abandoned": row["abandoned"],
                 },
                 "kills": row["kills"],
                 "deaths": row["deaths"],
                 "game_hours": row["game_hours"],
             },
-            "meta": {
-                "updated_at": row["general_stats_last_scraped_at"]
-            }
+            "meta": {"updated_at": row["general_stats_last_scraped_at"]},
         }
     else:
         data["general"] = None
@@ -124,9 +119,7 @@ async def get_stats_for_user(request: web.Request) -> web.StreamResponse:
     if row["cto_recover_stats_last_scraped_at"] is not None:
         data["cto"]["recovers"] = {
             "count": row["cto_recovers"],
-            "meta": {
-                "updated_at": row["cto_recover_stats_last_scraped_at"]
-            }
+            "meta": {"updated_at": row["cto_recover_stats_last_scraped_at"]},
         }
     else:
         data["cto"]["recovers"] = None
@@ -134,12 +127,9 @@ async def get_stats_for_user(request: web.Request) -> web.StreamResponse:
     if row["cto_steal_stats_last_scraped_at"] is not None:
         data["cto"]["steals"] = {
             "count": row["cto_steals"],
-            "meta": {
-                "updated_at": row["cto_steal_stats_last_scraped_at"]
-            }
+            "meta": {"updated_at": row["cto_steal_stats_last_scraped_at"]},
         }
     else:
         data["cto"]["steals"] = None
 
     return web.json_response(data)
-    

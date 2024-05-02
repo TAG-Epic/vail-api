@@ -1,7 +1,17 @@
-database_url = "/opt/data/db.sqlite"
+mode = "scraper"
+enabled = true
 user_agent = "VailGrafanaScraper v/1.0 (contact info here)"
-scrape = true
+
+database_url = "/opt/data/db.sqlite"
 
 [rate_limiter]
 times = 2
 per = 3
+
+[user]
+email = ""
+password = ""
+
+[bans]
+aexlab = false
+accelbyte = false

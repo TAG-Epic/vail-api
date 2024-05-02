@@ -14,7 +14,12 @@ class CircuitBreaker:
         if self.tripped:
             raise CicuitTrippedError()
 
-    def __exit__(self, exc_type: Type[BaseException], exc: BaseException, tb: TracebackType) -> None:
+    def __exit__(
+        self,
+        exc_type: Type[BaseException] | None,
+        exc: BaseException | None,
+        tb: TracebackType | None,
+    ) -> None:
         if exc is not None:
             if self._current_errors == 0:
                 event_loop = asyncio.get_running_loop()
@@ -22,7 +27,8 @@ class CircuitBreaker:
             self._current_errors += 1
             if self._current_errors == self.max_errors:
                 self.tripped = True
-        raise exc
+
+            raise exc
 
     def _reset(self) -> None:
         self._current_errors = 0

@@ -1,21 +1,28 @@
+import asyncio
 from logging import getLogger
-import typing
 import aiosqlite
 import time
 from aiohttp import ClientSession
 from slowstack.asynchronous.times_per import TimesPerRateLimiter
 
+from .models import AccelByteStatCode, AexlabStatCode
+from .client import VailClient
 from .utils.circuit_breaker import CircuitBreaker
 from .utils.exclusive_lock import ExclusiveLock
-from .config import Config
+from .config import ScraperConfig
 from .errors import NoContentPageBug
-from .models import ScoreLeaderboardPage, ScoreLeaderboardPlayer
 
 _logger = getLogger(__name__)
 
 
 class VailScraper:
-    def __init__(self, database: aiosqlite.Connection, database_lock: ExclusiveLock, config: Config) -> None:
+    def __init__(
+        self,
+        database: aiosqlite.Connection,
+        database_lock: ExclusiveLock,
+        vail_client: VailClient,
+        config: ScraperConfig,
+    ) -> None:
         self._session: ClientSession = ClientSession(
             headers={"User-Agent": config.user_agent, "Bot": "true"},
             base_url="https://aexlab.com",
@@ -26,57 +33,29 @@ class VailScraper:
         self.circuit_breaker: CircuitBreaker = CircuitBreaker(5, 10)
         self._database: aiosqlite.Connection = database
         self._database_lock: ExclusiveLock = database_lock
-        self.last_scrape_at: float = time.time()
-        self.users_failed_scrape: int = 0
-        self.last_scrape_duration: float = 0
+        self._vail_client: VailClient = vail_client
+        self._config: ScraperConfig = config
 
     async def run(self) -> None:
-        while True:
-            started_scraping_at = time.time()
-            await self._scrape_xp_stats()
-            await self._scrape_cto_steals()
-            await self._scrape_cto_recovers()
-            
-            # Scraping stats
-            ended_scraping_at = time.time()
-            self.last_scrape_duration = ended_scraping_at - started_scraping_at
+        tasks: list[asyncio.Task[None]] = []
+        if not self._config.bans.aexlab:
+            tasks.append(asyncio.create_task(self._scrape_aexlab_xp_stats()))
+            tasks.append(asyncio.create_task(self._scrape_aexlab_cto_steal_stats()))
+            tasks.append(asyncio.create_task(self._scrape_aexlab_cto_recover_stats()))
+        elif not self._config.bans.accelbyte:
+            tasks.append(asyncio.create_task(self._scrape_accelbyte_stats()))
 
-            # Check how many users are outdated
-            outdated_user_ids: set[str] = set()
+        await asyncio.gather(*tasks)
 
-
-            # General stats
-            result = await self._database.execute("select id from general_stats where last_scraped_at < ?", [started_scraping_at])
-            rows = await result.fetchall()
-            outdated_user_ids.update([row[0] for row in rows])
-            
-            # XP Stats
-            result = await self._database.execute("select id from xp_stats where last_scraped_at < ?", [started_scraping_at])
-            rows = await result.fetchall()
-            outdated_user_ids.update([row[0] for row in rows])
-            
-            # CTO steals
-            result = await self._database.execute("select id from cto_steal_stats where last_scraped_at < ?", [started_scraping_at])
-            rows = await result.fetchall()
-            outdated_user_ids.update([row[0] for row in rows])
-
-            # CTO recovers
-            result = await self._database.execute("select id from cto_recover_stats where last_scraped_at < ?", [started_scraping_at])
-            rows = await result.fetchall()
-            outdated_user_ids.update([row[0] for row in rows])
-            
-            self.users_failed_scrape = len(outdated_user_ids)
-
-
-
-
-    async def _scrape_xp_stats(self) -> None:
+    async def _scrape_aexlab_xp_stats(self) -> None:
         page_id = 0
         while True:
             try:
-                page = await self.get_leaderboard_page(page_id)
+                page = await self._vail_client.get_aexlab_leaderboard_page(
+                    AexlabStatCode.SCORE, page_id=page_id
+                )
             except NoContentPageBug:
-                _logger.error("no content page bug!")
+                _logger.error("no content page bug on aexlab xp!")
                 page_id += 1
                 continue
             except:
@@ -85,7 +64,8 @@ class VailScraper:
             _logger.debug("scraped %s users (page %s)", len(page), page_id)
 
             if len(page) == 0:
-                break
+                page_id = 0
+                continue
 
             paged_scraped_at = time.time()
             async with self._database_lock.shared():
@@ -106,7 +86,7 @@ class VailScraper:
                             user.stats.assists,
                             user.stats.deaths,
                             user.stats.game_hours,
-                            paged_scraped_at
+                            paged_scraped_at,
                         )
                         for user in page
                     ],
@@ -114,25 +94,23 @@ class VailScraper:
                 await self._database.executemany(
                     "insert or replace into xp_stats (id, xp, last_scraped_at) values (?, ?, ?)",
                     [
-                        (
-                            user.user_id,
-                            user.stats.point,
-                            paged_scraped_at
-                        )
+                        (user.user_id, user.stats.point, paged_scraped_at)
                         for user in page
-                    ]
+                    ],
                 )
                 await self._database.commit()
 
             page_id += 1
 
-    async def _scrape_cto_steals(self) -> None:
+    async def _scrape_aexlab_cto_steal_stats(self) -> None:
         page_id = 0
         while True:
             try:
-                page = await self.get_leaderboard_page(page_id, point="cto-steals")
+                page = await self._vail_client.get_aexlab_leaderboard_page(
+                    AexlabStatCode.CTO_STEALS, page_id=page_id
+                )
             except NoContentPageBug:
-                _logger.error("no content page bug!")
+                _logger.error("no content page bug on aexlab cto steal!")
                 page_id += 1
                 continue
             except:
@@ -141,7 +119,8 @@ class VailScraper:
             _logger.debug("scraped %s users (page %s)", len(page), page_id)
 
             if len(page) == 0:
-                break
+                page_id = 0
+                continue
 
             paged_scraped_at = time.time()
             async with self._database_lock.shared():
@@ -162,7 +141,7 @@ class VailScraper:
                             user.stats.assists,
                             user.stats.deaths,
                             user.stats.game_hours,
-                            paged_scraped_at
+                            paged_scraped_at,
                         )
                         for user in page
                     ],
@@ -170,25 +149,23 @@ class VailScraper:
                 await self._database.executemany(
                     "insert or replace into cto_steal_stats (id, steals, last_scraped_at) values (?, ?, ?)",
                     [
-                        (
-                            user.user_id,
-                            user.stats.point,
-                            paged_scraped_at
-                        )
+                        (user.user_id, user.stats.point, paged_scraped_at)
                         for user in page
-                    ]
+                    ],
                 )
                 await self._database.commit()
 
             page_id += 1
 
-    async def _scrape_cto_recovers(self) -> None:
+    async def _scrape_aexlab_cto_recover_stats(self) -> None:
         page_id = 0
         while True:
             try:
-                page = await self.get_leaderboard_page(page_id, point="cto-recovers")
+                page = await self._vail_client.get_aexlab_leaderboard_page(
+                    AexlabStatCode.CTO_RECOVERS, page_id=page_id
+                )
             except NoContentPageBug:
-                _logger.error("no content page bug!")
+                _logger.error("no content page bug on aexlab cto recover!")
                 page_id += 1
                 continue
             except:
@@ -197,7 +174,8 @@ class VailScraper:
             _logger.debug("scraped %s users (page %s)", len(page), page_id)
 
             if len(page) == 0:
-                break
+                page_id = 0
+                continue
 
             paged_scraped_at = time.time()
             async with self._database_lock.shared():
@@ -218,7 +196,7 @@ class VailScraper:
                             user.stats.assists,
                             user.stats.deaths,
                             user.stats.game_hours,
-                            paged_scraped_at
+                            paged_scraped_at,
                         )
                         for user in page
                     ],
@@ -226,50 +204,86 @@ class VailScraper:
                 await self._database.executemany(
                     "insert or replace into cto_recover_stats (id, recovers, last_scraped_at) values (?, ?, ?)",
                     [
-                        (
-                            user.user_id,
-                            user.stats.point,
-                            paged_scraped_at
-                        )
+                        (user.user_id, user.stats.point, paged_scraped_at)
                         for user in page
-                    ]
+                    ],
                 )
                 await self._database.commit()
 
             page_id += 1
 
+    async def _scrape_accelbyte_stats(self) -> None:
+        page_id = 0
+        while True:
+            try:
+                page = await self._vail_client.get_accelbyte_leaderboard_page(
+                    AccelByteStatCode.SCORE, page_id=page_id
+                )
+            except NoContentPageBug:
+                _logger.error("no content page bug on accelbyte!")
+                page_id += 1
+                continue
+            except:
+                _logger.exception("failed to fetch page")
+                continue
+            _logger.debug("scraped %s users (page %s)", len(page), page_id)
 
+            if len(page) == 0:
+                page_id = 0
+                continue
 
+            for leaderboard_stat in page:
+                user_info = await self._vail_client.get_accelbyte_user_info(
+                    leaderboard_stat.user_id
+                )
+                user_stats = await self._vail_client.get_accelbyte_user_stats(
+                    leaderboard_stat.user_id
+                )
+                scraped_at = time.time()
+                async with self._database_lock.shared():
+                    await self._database.execute(
+                        "insert or replace into users (id, name) values (?, ?)",
+                        [leaderboard_stat.user_id, user_info.display_name],
+                    )
+                    await self._database.execute(
+                        "insert or replace into general_stats (id, won, lost, draws, abandoned, kills, assists, deaths, game_hours, last_scraped_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        [
+                            leaderboard_stat.user_id,
+                            user_stats[AccelByteStatCode.GAMES_WON],
+                            user_stats[AccelByteStatCode.GAMES_LOST],
+                            user_stats[AccelByteStatCode.GAMES_DRAWN],
+                            user_stats[AccelByteStatCode.GAMES_ABANDONED],
+                            user_stats[AccelByteStatCode.KILLS],
+                            user_stats[AccelByteStatCode.ASSISTS],
+                            user_stats[AccelByteStatCode.DEATHS],
+                            user_stats[AccelByteStatCode.GAME_SECONDS],  # TODO: Wrong name?
+                            scraped_at,
+                        ],
+                    )
+                    await self._database.execute(
+                        "insert or replace into cto_steal_stats (id, steals, last_scraped_at) values (?, ?, ?)",
+                        [
+                            leaderboard_stat.user_id,
+                            user_stats[AccelByteStatCode.GAMEMODE_CTO_STEALS],
+                            scraped_at,
+                        ],
+                    )
+                    await self._database.execute(
+                        "insert or replace into cto_steal_recovers (id, recovers, last_scraped_at) values (?, ?, ?)",
+                        [
+                            leaderboard_stat.user_id,
+                            user_stats[AccelByteStatCode.GAMEMODE_CTO_RECOVERS],
+                            scraped_at,
+                        ],
+                    )
+                    await self._database.execute(
+                        "insert or replace into xp_stats (id, xp, last_scraped_at) values (?, ?, ?)",
+                        [
+                            leaderboard_stat.user_id,
+                            user_stats[AccelByteStatCode.SCORE],
+                            scraped_at,
+                        ],
+                    )
+                    await self._database.commit()
 
-    async def get_leaderboard_page(
-            self, page_id: int, *, page_size: int = 100, point: typing.Literal["score", "wins", "kills", "cto-steals", "game-seconds", "cto-recovers"] = "score"
-    ) -> list[ScoreLeaderboardPlayer]:
-        error: Exception | None = None
-        for retry_attempt in range(5):
-            async with self._rate_limiter.acquire():
-                _logger.debug("fetching page %s", page_id)
-                try:
-                    with self.circuit_breaker:
-                        response = await self._session.get(
-                            "/api/leaderboard",
-                            params={
-                                "leaderboardCode": point,
-                                "page": page_id + 1,
-                                "pageLimit": page_size,
-                            },
-                        )
-                except Exception as error:
-                    _logger.exception("failed to fetch page")
-                    error = error
-                    continue
-            with self.circuit_breaker:
-                if response.status == 204:
-                    _logger.warn("204 page!")
-                    raise NoContentPageBug()
-                if not response.ok:
-                    _logger.error("failed to parse result: %s", await response.text())
-                    response.raise_for_status()
-                data = await response.text()
-                page = ScoreLeaderboardPage.validate_json(data)
-                return page
-        raise typing.cast(Exception, error)
+            page_id += 1

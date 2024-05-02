@@ -1,3 +1,5 @@
+import typing
+
 import toml
 from pydantic import BaseModel
 
@@ -9,16 +11,30 @@ class RateLimitConfig(BaseModel):
     per: float
 
 
-class Config(BaseModel):
-    database_url: str
+class ScraperUserConfig(BaseModel):
+    email: str
+    password: str
+
+
+class BansConfig(BaseModel):
+    aexlab: bool = False
+    accelbyte: bool = False
+
+
+class ScraperConfig(BaseModel):
+    mode: typing.Literal["scraper"] = "scraper"
+    enabled: bool = True
     user_agent: str
+
+    bans: BansConfig
+    user: ScraperUserConfig
     rate_limiter: RateLimitConfig
-    scrape: bool 
+    database_url: str
 
 
-def load_config() -> Config:
+def load_config() -> ScraperConfig:
     try:
         with open("config.toml") as f:
-            return Config.model_validate(toml.load(f))
+            return ScraperConfig.model_validate(toml.load(f))
     except:
         raise ConfigLoadError()

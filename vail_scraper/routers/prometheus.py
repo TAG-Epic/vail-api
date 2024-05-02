@@ -6,6 +6,7 @@ from .. import app_keys
 
 router = web.RouteTableDef()
 
+
 @router.get("/metrics")
 @rate_limit_http(lambda: TimesPerRateLimiter(1, 10))
 async def get_metrics(request: web.Request) -> web.Response:
@@ -24,7 +25,7 @@ async def get_metrics(request: web.Request) -> web.Response:
 
     lines.append(f"scraper_last_scrape_duration {scraper.last_scrape_duration}")
 
-    # General stats 
+    # General stats
     result = await database.execute(
         """
         select
@@ -68,7 +69,9 @@ async def get_metrics(request: web.Request) -> web.Response:
     )
     rows = await result.fetchall()
     for row in rows:
-        lines.append(f'stats_xp{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}} {row[2]}')
+        lines.append(
+            f'stats_xp{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}} {row[2]}'
+        )
 
     result = await database.execute(
         """
@@ -77,7 +80,9 @@ async def get_metrics(request: web.Request) -> web.Response:
     )
     rows = await result.fetchall()
     for row in rows:
-        lines.append(f'stats_cto_steals{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}} {row[2]}')
+        lines.append(
+            f'stats_cto_steals{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}} {row[2]}'
+        )
 
     result = await database.execute(
         """
@@ -86,8 +91,11 @@ async def get_metrics(request: web.Request) -> web.Response:
     )
     rows = await result.fetchall()
     for row in rows:
-        lines.append(f'stats_cto_recovers{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}} {row[2]}')
+        lines.append(
+            f'stats_cto_recovers{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}"}} {row[2]}'
+        )
     return web.Response(text="\n".join(lines))
 
+
 def escape_prometheus(text: str) -> str:
-    return text.replace("\\", "\\\\").replace("\"", "\\\"")
+    return text.replace("\\", "\\\\").replace('"', '\\"')

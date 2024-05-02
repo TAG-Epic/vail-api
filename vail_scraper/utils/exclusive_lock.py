@@ -2,6 +2,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
+
 class ExclusiveLock:
     def __init__(self) -> None:
         self._reads: list[asyncio.Future[None]] = []
@@ -15,7 +16,7 @@ class ExclusiveLock:
         future: asyncio.Future[None] = asyncio.Future()
         self._reads.append(future)
         try:
-            yield 
+            yield
         finally:
             future.set_result(None)
             self._reads.remove(future)
