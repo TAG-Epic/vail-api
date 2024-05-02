@@ -65,6 +65,7 @@ class VailScraper:
 
             if len(page) == 0:
                 page_id = 0
+                _logger.debug("scanned through all pages, starting over again")
                 continue
 
             paged_scraped_at = time.time()
@@ -120,6 +121,7 @@ class VailScraper:
 
             if len(page) == 0:
                 page_id = 0
+                _logger.debug("scanned through all pages, starting over again")
                 continue
 
             paged_scraped_at = time.time()
@@ -175,6 +177,7 @@ class VailScraper:
 
             if len(page) == 0:
                 page_id = 0
+                _logger.debug("scanned through all pages, starting over again")
                 continue
 
             paged_scraped_at = time.time()
@@ -230,6 +233,7 @@ class VailScraper:
 
             if len(page) == 0:
                 page_id = 0
+                _logger.debug("scanned through all pages, starting over again")
                 continue
 
             for leaderboard_stat in page:
@@ -249,14 +253,14 @@ class VailScraper:
                         "insert or replace into general_stats (id, won, lost, draws, abandoned, kills, assists, deaths, game_hours, last_scraped_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                         [
                             leaderboard_stat.user_id,
-                            user_stats[AccelByteStatCode.GAMES_WON],
-                            user_stats[AccelByteStatCode.GAMES_LOST],
-                            user_stats[AccelByteStatCode.GAMES_DRAWN],
-                            user_stats[AccelByteStatCode.GAMES_ABANDONED],
-                            user_stats[AccelByteStatCode.KILLS],
-                            user_stats[AccelByteStatCode.ASSISTS],
-                            user_stats[AccelByteStatCode.DEATHS],
-                            user_stats[AccelByteStatCode.GAME_SECONDS],  # TODO: Wrong name?
+                            user_stats.get(AccelByteStatCode.GAMES_WON, 0),
+                            user_stats.get(AccelByteStatCode.GAMES_LOST, 0),
+                            user_stats.get(AccelByteStatCode.GAMES_DRAWN, 0),
+                            user_stats.get(AccelByteStatCode.GAMES_ABANDONED, 0),
+                            user_stats.get(AccelByteStatCode.KILLS, 0),
+                            user_stats.get(AccelByteStatCode.ASSISTS, 0),
+                            user_stats.get(AccelByteStatCode.DEATHS, 0),
+                            user_stats.get(AccelByteStatCode.GAME_SECONDS, 0),  # TODO: Wrong name?
                             scraped_at,
                         ],
                     )
@@ -264,15 +268,15 @@ class VailScraper:
                         "insert or replace into cto_steal_stats (id, steals, last_scraped_at) values (?, ?, ?)",
                         [
                             leaderboard_stat.user_id,
-                            user_stats[AccelByteStatCode.GAMEMODE_CTO_STEALS],
+                            user_stats.get(AccelByteStatCode.GAMEMODE_CTO_STEALS, 0),
                             scraped_at,
                         ],
                     )
                     await self._database.execute(
-                        "insert or replace into cto_steal_recovers (id, recovers, last_scraped_at) values (?, ?, ?)",
+                        "insert or replace into cto_recover_stats (id, recovers, last_scraped_at) values (?, ?, ?)",
                         [
                             leaderboard_stat.user_id,
-                            user_stats[AccelByteStatCode.GAMEMODE_CTO_RECOVERS],
+                            user_stats.get(AccelByteStatCode.GAMEMODE_CTO_RECOVERS, 0),
                             scraped_at,
                         ],
                     )
@@ -280,7 +284,7 @@ class VailScraper:
                         "insert or replace into xp_stats (id, xp, last_scraped_at) values (?, ?, ?)",
                         [
                             leaderboard_stat.user_id,
-                            user_stats[AccelByteStatCode.SCORE],
+                            user_stats.get(AccelByteStatCode.SCORE, 0),
                             scraped_at,
                         ],
                     )

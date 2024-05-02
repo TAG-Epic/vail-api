@@ -12,7 +12,6 @@ router = web.RouteTableDef()
 async def get_metrics(request: web.Request) -> web.Response:
     lines = []
     database = request.app[app_keys.DATABASE]
-    scraper = request.app[app_keys.SCRAPER]
 
     # Scrape info
     result = await database.execute("select count(*) from users")
@@ -20,10 +19,6 @@ async def get_metrics(request: web.Request) -> web.Response:
     assert row is not None
     total_users = row[0]
     lines.append(f"scraper_users_found {total_users}")
-
-    lines.append(f"scraper_users_outdated {scraper.users_failed_scrape}")
-
-    lines.append(f"scraper_last_scrape_duration {scraper.last_scrape_duration}")
 
     # General stats
     result = await database.execute(

@@ -44,6 +44,8 @@ async def main() -> None:
 
     if config.enabled:
         asyncio.create_task(app[app_keys.SCRAPER].run())
+
+    _logger.info("starting listening")
     await web._run_app(app, host="0.0.0.0", port=8000)
 
 
