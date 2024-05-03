@@ -12,7 +12,8 @@ from . import app_keys
 from .scraper import VailScraper
 from .routers.raw import router as raw_router
 from .routers.prometheus import router as prometheus_router
-from .routers.api import router as api_router
+from .routers.api.v1 import router as api_v1_router
+from .routers.api.v2 import router as api_v2_router
 
 logging.basicConfig(level=logging.DEBUG)
 _logger = logging.getLogger(__name__)
@@ -22,7 +23,8 @@ app = web.Application()
 # Register routers
 app.add_routes(raw_router)
 app.add_routes(prometheus_router)
-app.add_routes(api_router)
+app.add_routes(api_v1_router)
+app.add_routes(api_v2_router)
 
 
 async def main() -> None:

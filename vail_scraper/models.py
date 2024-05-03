@@ -290,6 +290,7 @@ class AccelByteStatCode(StrEnum):
     WEAPON_VECTOR45_SHOTS_HIT_ARM = "weapon-vector45-shots-hit-arm"
     MAP_CLIFFSIDE_GAMES_WON = "map-cliffside-games-won"
 
+
 class PlayerStats(BaseModel):
     won: int
     lost: int

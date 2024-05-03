@@ -1,4 +1,5 @@
-from enum import StrEnum
+from enum import IntEnum, StrEnum
+from yarl import URL
 
 
 class ConfigLoadError(Exception):
@@ -15,3 +16,32 @@ class APIErrorCode(StrEnum):
     USER_NOT_FOUND = "user_not_found"
     MISSING_QUERY_PARAMETER = "missing_query_parameter"
     RATE_LIMITED = "rate_limited"
+
+
+class AccelByteErrorCode(IntEnum):
+    PLATFORM_USER_NOT_FOUND = 10139
+    USER_ID_WRONG_FORMAT = 20002
+
+
+class Service(StrEnum):
+    AEXLAB = "aexlab"
+    ACCELBYTE = "accelbyte"
+    UNKNOWN = "unknown"
+
+    @staticmethod
+    def get_from_url(url: URL | str) -> "Service":
+        parsed_url = URL(url)
+
+        if parsed_url.host is None:
+            return Service.UNKNOWN
+        host_to_service: dict[str, Service] = {
+            "login.vailvr.com": Service.ACCELBYTE,
+            "aexlab.com": Service.AEXLAB,
+            "ivrl.aexlab.com": Service.AEXLAB,
+        }
+        return host_to_service.get(parsed_url.host, Service.UNKNOWN)
+
+
+class ExternalServiceError(Exception):
+    def __init__(self, service: Service, status: int, message: str) -> None:
+        super().__init__(f"{service}({status}): {message}")

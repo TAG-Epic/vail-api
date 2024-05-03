@@ -9,11 +9,14 @@ import secrets
 import asyncio
 from yarl import URL
 from urllib.parse import quote
+from pprint import pprint
 
 from slowstack.asynchronous.times_per import TimesPerRateLimiter
 import aiohttp
 
-from .errors import NoContentPageBug
+from vail_scraper.enums import RequestPriority
+
+from .errors import AccelByteErrorCode, ExternalServiceError, NoContentPageBug, Service
 from .models import (
     AccelByteLeaderboardPage,
     AccelByteLeaderboardPlayer,
@@ -28,6 +31,7 @@ from .utils.circuit_breaker import CircuitBreaker
 from .config import ScraperConfig
 
 _CLIENT_ID: str = "8e1fbe68aef14404882e88358be5536b"
+_TOKEN_MARGIN_SECONDS: float = 2
 _logger = getLogger(__name__)
 
 
@@ -89,7 +93,7 @@ class VailClient:
 
         # Get request id
         with self._circuit_breaker:
-            async with self._rate_limiter.acquire(priority=100):
+            async with self._rate_limiter.acquire(priority=RequestPriority.HIGH):
                 response = await session.get(
                     "https://login.vailvr.com/iam/v3/oauth/authorize",
                     params={
@@ -130,7 +134,7 @@ class VailClient:
         _logger.debug("got code: %s", code)
 
         with self._circuit_breaker:
-            async with self._rate_limiter.acquire(priority=100):
+            async with self._rate_limiter.acquire(priority=RequestPriority.HIGH):
                 response = await session.post(
                     "https://login.vailvr.com/iam/v3/oauth/token",
                     data={
@@ -150,24 +154,35 @@ class VailClient:
 
         return data["refresh_token"], data["access_token"]
 
-    def _is_token_expired(self, token: str) -> bool:
+    def _get_token_expiry_in_seconds(self, token: str) -> float:
         header, body, signature = token.split(".")
         del header, signature
         body_data = json.loads(base64.b64decode(body + "=="))
 
-        return not (body_data["iat"] + 10 > time.time())
+        expire_time = body_data["exp"] - time.time()
+        _logger.debug("token expires in %s", expire_time)
+        return expire_time
 
     async def _get_token(self) -> str:
         async with self._token_lock:
             if self._refresh_token is None or self._access_token is None:
+                _logger.debug("creating new refresh token due to none being saved")
                 self._refresh_token, self._access_token = (
                     await self._get_refresh_token()
                 )
-            if self._is_token_expired(self._refresh_token):
+            if (
+                self._get_token_expiry_in_seconds(self._refresh_token)
+                < _TOKEN_MARGIN_SECONDS
+            ):
+                _logger.debug("creating new refresh token as current expired")
                 self._refresh_token, self._access_token = (
                     await self._get_refresh_token()
                 )
-            if self._is_token_expired(self._access_token):
+            if (
+                self._get_token_expiry_in_seconds(self._access_token)
+                < _TOKEN_MARGIN_SECONDS
+            ):
+                _logger.debug("creating new access token as current expired")
                 # TODO: Actually refresh
                 self._refresh_token, self._access_token = (
                     await self._get_refresh_token()
@@ -175,12 +190,71 @@ class VailClient:
 
         return self._access_token
 
+    async def _raise_for_status(self, response: aiohttp.ClientResponse):
+        if not response.ok:
+            raise ExternalServiceError(
+                Service.get_from_url(response.url),
+                response.status,
+                await response.text(),
+            )
+
+    async def _do_authenticated_request(
+        self,
+        method: typing.Literal["GET", "POST", "PATCH", "PUT", "DELETE"],
+        *args,
+        priority: int = 0,
+        headers: dict[str, str] | None = None,
+        **kwargs,
+    ) -> aiohttp.ClientResponse:
+        headers = headers or {}
+
+        acquired_rate_limiter_event: asyncio.Event = asyncio.Event()
+
+        async def _do_request():
+            with self._circuit_breaker:
+                async with self._rate_limiter.acquire(priority=priority):
+                    acquired_rate_limiter_event.set()
+                    session = await self._get_session()
+                    mixed_headers = {"Authorization": f"Bearer {token}", **headers}
+                    return await session.request(
+                        method, *args, **kwargs, headers=mixed_headers
+                    )
+
+        while True:
+            token = await self._get_token()
+            do_request_task = asyncio.create_task(_do_request())
+
+            jwt_expires_after_seconds = self._get_token_expiry_in_seconds(token)
+            wait_for_jwt_expire_task = asyncio.create_task(
+                asyncio.sleep(jwt_expires_after_seconds - _TOKEN_MARGIN_SECONDS)
+            )
+            wait_for_rate_limit_spot_task = asyncio.create_task(
+                acquired_rate_limiter_event.wait()
+            )
+
+            await asyncio.wait(
+                [wait_for_rate_limit_spot_task, wait_for_jwt_expire_task],
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+
+            if wait_for_rate_limit_spot_task.done():
+                wait_for_jwt_expire_task.cancel()
+                return await do_request_task
+            else:
+                do_request_task.cancel()
+                wait_for_rate_limit_spot_task.cancel()
+
     async def get_aexlab_leaderboard_page(
-        self, stat_code: AexlabStatCode, *, page_id: int = 0, page_size: int = 100
+        self,
+        stat_code: AexlabStatCode,
+        *,
+        page_id: int = 0,
+        page_size: int = 100,
+        priority: int = 0,
     ) -> list[AexlabLeaderboardPlayer]:
         session = await self._get_session()
         with self._circuit_breaker:
-            async with self._rate_limiter.acquire():
+            async with self._rate_limiter.acquire(priority=priority):
                 response = await session.get(
                     "https://aexlab.com/api/leaderboard",
                     params={
@@ -192,61 +266,74 @@ class VailClient:
             if response.status == 204:
                 _logger.warn("204 page!")
                 raise NoContentPageBug()
-            if not response.ok:
-                _logger.error("failed to parse result: %s", await response.text())
-                response.raise_for_status()
+            await self._raise_for_status(response)
             data = await response.text()
             page = AexlabLeaderboardPage.validate_json(data)
             return page
 
     async def get_accelbyte_leaderboard_page(
-        self, stat_code: AccelByteStatCode, *, page_id: int = 0, page_size=100
+        self,
+        stat_code: AccelByteStatCode,
+        *,
+        page_id: int = 0,
+        page_size: int = 100,
+        priority: int = 0,
     ) -> list[AccelByteLeaderboardPlayer]:
-        session = await self._get_session()
-        token = await self._get_token()
-
-        with self._circuit_breaker:
-            async with self._rate_limiter.acquire():
-                response = await session.get(
-                    f"https://login.vailvr.com/leaderboard/v3/public/namespaces/vailvr/leaderboards/{stat_code}/alltime",
-                    headers={"Authorization": f"Bearer {token}"},
-                    params={"limit": page_size, "offset": page_id * page_size},
-                )
-            if not response.ok:
-                _logger.error("failed to parse result: %s", await response.text())
-                response.raise_for_status()
-            data = await response.text()
-            page = AccelByteLeaderboardPage.model_validate_json(data)
-            return page.data
+        response = await self._do_authenticated_request(
+            "GET",
+            f"https://login.vailvr.com/leaderboard/v3/public/namespaces/vailvr/leaderboards/{quote(stat_code)}/alltime",
+            params={"limit": page_size, "offset": page_id * page_size},
+            priority=priority,
+        )
+        await self._raise_for_status(response)
+        data = await response.text()
+        page = AccelByteLeaderboardPage.model_validate_json(data)
+        return page.data
 
     async def get_accelbyte_user_stats(
-        self, user_id: str
-    ) -> dict[AccelByteStatCode, float]:
-        session = await self._get_session()
-        token = await self._get_token()
+        self, user_id: str, *, priority: int = 0
+    ) -> dict[str, float] | None:
+        response = await self._do_authenticated_request(
+            "GET",
+            f"https://login.vailvr.com/social/v1/public/namespaces/vailvr/users/{quote(user_id)}/statitems",
+            params={"limit": 1000},
+            priority=priority,
+        )
+        if not response.ok and response.content_type == "application/json":
+            error_data = await response.json()
+            error_code = error_data["errorCode"]
 
-        with self._circuit_breaker:
-            async with self._rate_limiter.acquire():
-                response = await session.get(
-                    f"https://login.vailvr.com/social/v1/public/namespaces/vailvr/users/{quote(user_id)}/statitems",
-                    params={"limit": 1000},
-                    headers={"Authorization": f"Bearer {token}"},
-                )
-            data = await response.text()
-            page = AccelBytePlayerStatItemsPage.model_validate_json(data)
-            return {stat_item.stat_code: stat_item.value for stat_item in page.data}
+            if (
+                error_code == AccelByteErrorCode.PLATFORM_USER_NOT_FOUND
+                or error_code == AccelByteErrorCode.USER_ID_WRONG_FORMAT
+            ):
+                return None
 
-    async def get_accelbyte_user_info(self, user_id: str) -> AccelBytePlayerInfo:
-        session = await self._get_session()
-        token = await self._get_token()
+        await self._raise_for_status(response)
+        data = await response.text()
 
-        with self._circuit_breaker:
-            async with self._rate_limiter.acquire():
-                response = await session.get(
-                    f"https://login.vailvr.com/iam/v3/public/namespaces/vailvr/users/{quote(user_id)}",
-                    params={"limit": 1000},
-                    headers={"Authorization": f"Bearer {token}"},
-                )
-            data = await response.text()
-            user = AccelBytePlayerInfo.model_validate_json(data)
-            return user
+        page = AccelBytePlayerStatItemsPage.model_validate_json(data)
+        return {stat_item.stat_code: stat_item.value for stat_item in page.data}
+
+    async def get_accelbyte_user_info(
+        self, user_id: str, *, priority: int = 0
+    ) -> AccelBytePlayerInfo | None:
+        response = await self._do_authenticated_request(
+            "GET",
+            f"https://login.vailvr.com/iam/v3/public/namespaces/vailvr/users/{quote(user_id)}",
+            priority=priority,
+        )
+        if not response.ok and response.content_type == "application/json":
+            error_data = await response.json()
+            error_code = error_data["errorCode"]
+
+            if (
+                error_code == AccelByteErrorCode.PLATFORM_USER_NOT_FOUND
+                or error_code == AccelByteErrorCode.USER_ID_WRONG_FORMAT
+            ):
+                return None
+
+        await self._raise_for_status(response)
+        data = await response.text()
+        user = AccelBytePlayerInfo.model_validate_json(data)
+        return user

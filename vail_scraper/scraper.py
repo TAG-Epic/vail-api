@@ -68,37 +68,28 @@ class VailScraper:
                 _logger.debug("scanned through all pages, starting over again")
                 continue
 
-            paged_scraped_at = time.time()
+            page_scraped_at = time.time()
             async with self._database_lock.shared():
                 await self._database.executemany(
                     "insert or replace into users (id, name) values (?, ?)",
                     [(user.user_id, user.display_name) for user in page],
                 )
-                await self._database.executemany(
-                    "insert or replace into general_stats (id, won, lost, draws, abandoned, kills, assists, deaths, game_hours, last_scraped_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    [
-                        (
-                            user.user_id,
-                            user.stats.won,
-                            user.stats.lost,
-                            user.stats.draws,
-                            user.stats.abandoned,
-                            user.stats.kills,
-                            user.stats.assists,
-                            user.stats.deaths,
-                            user.stats.game_hours,
-                            paged_scraped_at,
-                        )
-                        for user in page
-                    ],
-                )
-                await self._database.executemany(
-                    "insert or replace into xp_stats (id, xp, last_scraped_at) values (?, ?, ?)",
-                    [
-                        (user.user_id, user.stats.point, paged_scraped_at)
-                        for user in page
-                    ],
-                )
+                rows: list[tuple[str, str, int, float]] = []
+                for user in page:
+                    stats: dict[AccelByteStatCode, int] = {
+                        AccelByteStatCode.GAMES_WON: user.stats.won,
+                        AccelByteStatCode.GAMES_LOST: user.stats.lost,
+                        AccelByteStatCode.GAMES_DRAWN: user.stats.draws,
+                        AccelByteStatCode.GAMES_ABANDONED: user.stats.abandoned,
+                        AccelByteStatCode.KILLS: user.stats.kills,
+                        AccelByteStatCode.ASSISTS: user.stats.assists,
+                        AccelByteStatCode.DEATHS: user.stats.deaths,
+                        AccelByteStatCode.GAMEMODE_CTO_STEALS: user.point
+                    }
+
+                    for stat_code, value in stats.items():
+                        rows.append((user.user_id, stat_code, value, page_scraped_at))
+                await self._database.executemany("insert or replace into stats (user_id, code, value, updated_at) values (?, ?, ?, ?)", rows)
                 await self._database.commit()
 
             page_id += 1
@@ -108,7 +99,7 @@ class VailScraper:
         while True:
             try:
                 page = await self._vail_client.get_aexlab_leaderboard_page(
-                    AexlabStatCode.CTO_STEALS, page_id=page_id
+                    AexlabStatCode.CTO_RECOVERS, page_id=page_id
                 )
             except NoContentPageBug:
                 _logger.error("no content page bug on aexlab cto steal!")
@@ -124,37 +115,28 @@ class VailScraper:
                 _logger.debug("scanned through all pages, starting over again")
                 continue
 
-            paged_scraped_at = time.time()
+            page_scraped_at = time.time()
             async with self._database_lock.shared():
                 await self._database.executemany(
                     "insert or replace into users (id, name) values (?, ?)",
                     [(user.user_id, user.display_name) for user in page],
                 )
-                await self._database.executemany(
-                    "insert or replace into general_stats (id, won, lost, draws, abandoned, kills, assists, deaths, game_hours, last_scraped_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    [
-                        (
-                            user.user_id,
-                            user.stats.won,
-                            user.stats.lost,
-                            user.stats.draws,
-                            user.stats.abandoned,
-                            user.stats.kills,
-                            user.stats.assists,
-                            user.stats.deaths,
-                            user.stats.game_hours,
-                            paged_scraped_at,
-                        )
-                        for user in page
-                    ],
-                )
-                await self._database.executemany(
-                    "insert or replace into cto_steal_stats (id, steals, last_scraped_at) values (?, ?, ?)",
-                    [
-                        (user.user_id, user.stats.point, paged_scraped_at)
-                        for user in page
-                    ],
-                )
+                rows: list[tuple[str, str, int, float]] = []
+                for user in page:
+                    stats: dict[AccelByteStatCode, int] = {
+                        AccelByteStatCode.GAMES_WON: user.stats.won,
+                        AccelByteStatCode.GAMES_LOST: user.stats.lost,
+                        AccelByteStatCode.GAMES_DRAWN: user.stats.draws,
+                        AccelByteStatCode.GAMES_ABANDONED: user.stats.abandoned,
+                        AccelByteStatCode.KILLS: user.stats.kills,
+                        AccelByteStatCode.ASSISTS: user.stats.assists,
+                        AccelByteStatCode.DEATHS: user.stats.deaths,
+                        AccelByteStatCode.GAMEMODE_CTO_STEALS: user.point
+                    }
+
+                    for stat_code, value in stats.items():
+                        rows.append((user.user_id, stat_code, value, page_scraped_at))
+                await self._database.executemany("insert or replace into stats (user_id, code, value, updated_at) values (?, ?, ?, ?)", rows)
                 await self._database.commit()
 
             page_id += 1
@@ -180,37 +162,28 @@ class VailScraper:
                 _logger.debug("scanned through all pages, starting over again")
                 continue
 
-            paged_scraped_at = time.time()
+            page_scraped_at = time.time()
             async with self._database_lock.shared():
                 await self._database.executemany(
                     "insert or replace into users (id, name) values (?, ?)",
                     [(user.user_id, user.display_name) for user in page],
                 )
-                await self._database.executemany(
-                    "insert or replace into general_stats (id, won, lost, draws, abandoned, kills, assists, deaths, game_hours, last_scraped_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    [
-                        (
-                            user.user_id,
-                            user.stats.won,
-                            user.stats.lost,
-                            user.stats.draws,
-                            user.stats.abandoned,
-                            user.stats.kills,
-                            user.stats.assists,
-                            user.stats.deaths,
-                            user.stats.game_hours,
-                            paged_scraped_at,
-                        )
-                        for user in page
-                    ],
-                )
-                await self._database.executemany(
-                    "insert or replace into cto_recover_stats (id, recovers, last_scraped_at) values (?, ?, ?)",
-                    [
-                        (user.user_id, user.stats.point, paged_scraped_at)
-                        for user in page
-                    ],
-                )
+                rows: list[tuple[str, str, int, float]] = []
+                for user in page:
+                    stats: dict[AccelByteStatCode, int] = {
+                        AccelByteStatCode.GAMES_WON: user.stats.won,
+                        AccelByteStatCode.GAMES_LOST: user.stats.lost,
+                        AccelByteStatCode.GAMES_DRAWN: user.stats.draws,
+                        AccelByteStatCode.GAMES_ABANDONED: user.stats.abandoned,
+                        AccelByteStatCode.KILLS: user.stats.kills,
+                        AccelByteStatCode.ASSISTS: user.stats.assists,
+                        AccelByteStatCode.DEATHS: user.stats.deaths,
+                        AccelByteStatCode.GAMEMODE_CTO_RECOVERS: user.point
+                    }
+
+                    for stat_code, value in stats.items():
+                        rows.append((user.user_id, stat_code, value, page_scraped_at))
+                await self._database.executemany("insert or replace into stats (user_id, code, value, updated_at) values (?, ?, ?, ?)", rows)
                 await self._database.commit()
 
             page_id += 1
@@ -240,54 +213,33 @@ class VailScraper:
                 user_info = await self._vail_client.get_accelbyte_user_info(
                     leaderboard_stat.user_id
                 )
+                assert (
+                    user_info is not None
+                ), "user info missing even though it was on the leaderboard"
                 user_stats = await self._vail_client.get_accelbyte_user_stats(
                     leaderboard_stat.user_id
                 )
+                assert (
+                    user_stats is not None
+                ), "user stats missing even though it was on the leaderboard"
                 scraped_at = time.time()
                 async with self._database_lock.shared():
                     await self._database.execute(
                         "insert or replace into users (id, name) values (?, ?)",
                         [leaderboard_stat.user_id, user_info.display_name],
                     )
-                    await self._database.execute(
-                        "insert or replace into general_stats (id, won, lost, draws, abandoned, kills, assists, deaths, game_hours, last_scraped_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        [
-                            leaderboard_stat.user_id,
-                            user_stats.get(AccelByteStatCode.GAMES_WON, 0),
-                            user_stats.get(AccelByteStatCode.GAMES_LOST, 0),
-                            user_stats.get(AccelByteStatCode.GAMES_DRAWN, 0),
-                            user_stats.get(AccelByteStatCode.GAMES_ABANDONED, 0),
-                            user_stats.get(AccelByteStatCode.KILLS, 0),
-                            user_stats.get(AccelByteStatCode.ASSISTS, 0),
-                            user_stats.get(AccelByteStatCode.DEATHS, 0),
-                            user_stats.get(AccelByteStatCode.GAME_SECONDS, 0),  # TODO: Wrong name?
-                            scraped_at,
-                        ],
-                    )
-                    await self._database.execute(
-                        "insert or replace into cto_steal_stats (id, steals, last_scraped_at) values (?, ?, ?)",
-                        [
-                            leaderboard_stat.user_id,
-                            user_stats.get(AccelByteStatCode.GAMEMODE_CTO_STEALS, 0),
-                            scraped_at,
-                        ],
-                    )
-                    await self._database.execute(
-                        "insert or replace into cto_recover_stats (id, recovers, last_scraped_at) values (?, ?, ?)",
-                        [
-                            leaderboard_stat.user_id,
-                            user_stats.get(AccelByteStatCode.GAMEMODE_CTO_RECOVERS, 0),
-                            scraped_at,
-                        ],
-                    )
-                    await self._database.execute(
-                        "insert or replace into xp_stats (id, xp, last_scraped_at) values (?, ?, ?)",
-                        [
-                            leaderboard_stat.user_id,
-                            user_stats.get(AccelByteStatCode.SCORE, 0),
-                            scraped_at,
-                        ],
-                    )
+                    await self._database.executemany("insert or replace into stats (code, user_id, value, updated_at) values (?, ?, ?, ?)", [(stat_code, leaderboard_stat.user_id, value, scraped_at) for stat_code, value in user_stats.items()])
+                        
+                    # Removed stat codes
+                    result = await self._database.execute("select code from stats where user_id = ?", [leaderboard_stat.user_id])
+                    removed_stat_codes = []
+                    for row in await result.fetchall():
+                        stat_code = row[0]
+                        if stat_code not in user_stats.keys():
+                            removed_stat_codes.append(stat_code)
+
+                    await self._database.executemany("delete from stats where user_id = ? and code = ?", [(leaderboard_stat.user_id, removed_stat_code) for removed_stat_code in removed_stat_codes])
+
                     await self._database.commit()
 
             page_id += 1
