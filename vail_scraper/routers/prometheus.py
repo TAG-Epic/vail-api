@@ -1,3 +1,5 @@
+import asyncio
+
 from aiohttp import web
 from slowstack.asynchronous.times_per import TimesPerRateLimiter
 
@@ -9,7 +11,16 @@ router = web.RouteTableDef()
 
 @router.get("/metrics")
 @rate_limit_http(lambda: TimesPerRateLimiter(2, 10))
-async def get_metrics(request: web.Request) -> web.Response:
+async def get_metrics(request: web.Request) -> web.StreamResponse:
+    response = web.StreamResponse()
+    response.set_status(200)
+    response.headers["Content-Type"] = "text/plain; version=0.0.4"
+    await response.prepare(request)
+
+    await stream_prometheus(request, response)
+    return response
+
+async def stream_prometheus(request: web.Request, response: web.StreamResponse):
     lines = []
     database = request.app[app_keys.DATABASE]
 
@@ -29,12 +40,21 @@ async def get_metrics(request: web.Request) -> web.Response:
             join stats on users.id = stats.user_id
     """
     )
-    rows = await result.fetchall()
+    chunk_size = 1000
+    while True:
+        rows = list(await result.fetchmany(chunk_size))
 
-    for row in rows:
-        lines.append(f'stats_value{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}", code="{escape_prometheus(row[2])}"}} {row[3]}')
-        lines.append(f'stats_updated_at{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}", code="{escape_prometheus(row[2])}"}} {row[4]}')
-    return web.Response(text="\n".join(lines))
+        if len(rows) == 0:
+            break
+
+        for row in rows:
+            try:
+                await response.write(f'stats_value{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}", code="{escape_prometheus(row[2])}"}} {row[3]}\n'.encode())
+                await response.write(f'stats_updated_at{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}", code="{escape_prometheus(row[2])}"}} {row[4]}\n'.encode())
+            except:
+                print(row)
+                raise
+    await response.write_eof()
 
 
 def escape_prometheus(text: str) -> str:
