@@ -8,7 +8,7 @@ router = web.RouteTableDef()
 
 
 @router.get("/metrics")
-@rate_limit_http(lambda: TimesPerRateLimiter(1, 10))
+@rate_limit_http(lambda: TimesPerRateLimiter(2, 10))
 async def get_metrics(request: web.Request) -> web.Response:
     lines = []
     database = request.app[app_keys.DATABASE]
