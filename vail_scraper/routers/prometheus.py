@@ -1,26 +1,12 @@
-import asyncio
-
 from aiohttp import web
-from slowstack.asynchronous.times_per import TimesPerRateLimiter
 
-from ..utils.rate_limit import rate_limit_http
 from .. import app_keys
 
 router = web.RouteTableDef()
 
 
 @router.get("/metrics")
-@rate_limit_http(lambda: TimesPerRateLimiter(2, 10))
-async def get_metrics(request: web.Request) -> web.StreamResponse:
-    response = web.StreamResponse()
-    response.set_status(200)
-    response.headers["Content-Type"] = "text/plain; version=0.0.4"
-    await response.prepare(request)
-
-    await stream_prometheus(request, response)
-    return response
-
-async def stream_prometheus(request: web.Request, response: web.StreamResponse):
+async def get_metrics(request: web.Request) -> web.Response:
     lines = []
     database = request.app[app_keys.DATABASE]
 
@@ -40,21 +26,16 @@ async def stream_prometheus(request: web.Request, response: web.StreamResponse):
             join stats on users.id = stats.user_id
     """
     )
-    chunk_size = 1000
-    while True:
-        rows = list(await result.fetchmany(chunk_size))
+    rows = await result.fetchall()
 
-        if len(rows) == 0:
-            break
-
-        for row in rows:
-            try:
-                await response.write(f'stats_value{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}", code="{escape_prometheus(row[2])}"}} {row[3]}\n'.encode())
-                await response.write(f'stats_updated_at{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}", code="{escape_prometheus(row[2])}"}} {row[4]}\n'.encode())
-            except:
-                print(row)
-                raise
-    await response.write_eof()
+    for row in rows:
+        try:
+            lines.append(f'stats_value{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}", code="{escape_prometheus(row[2])}"}} {row[3]}')
+            lines.append(f'stats_updated_at{{id="{escape_prometheus(row[0])}", name="{escape_prometheus(row[1])}", code="{escape_prometheus(row[2])}"}} {row[4]}')
+        except:
+            print(row)
+            raise
+    return web.Response(text="\n".join(lines))
 
 
 def escape_prometheus(text: str) -> str:
