@@ -5,12 +5,12 @@ import time
 from aiohttp import ClientSession
 from slowstack.asynchronous.times_per import TimesPerRateLimiter
 
-from .models import AccelByteStatCode, AexlabStatCode
+from .models import AccelBytePlayerInfo, AccelByteStatCode, AexlabStatCode
 from .client import VailClient
 from .utils.circuit_breaker import CircuitBreaker
 from .utils.exclusive_lock import ExclusiveLock
 from .config import ScraperConfig
-from .errors import NoContentPageBug
+from .errors import ExternalServiceError, NoContentPageBug
 
 _logger = getLogger(__name__)
 
@@ -210,9 +210,16 @@ class VailScraper:
                 continue
 
             for leaderboard_stat in page:
-                user_info = await self._vail_client.get_accelbyte_user_info(
-                    leaderboard_stat.user_id
-                )
+                try:
+                    user_info = await self._retry_get_player_info(
+                        leaderboard_stat.user_id
+                    )
+                except ExternalServiceError as error:
+                    if error.status == 500:
+                        # Bugged user, not possible to view!
+                        _logger.warn("skipped bugged user %s", leaderboard_stat.user_id)
+                        continue
+                    raise
                 assert (
                     user_info is not None
                 ), "user info missing even though it was on the leaderboard"
@@ -243,3 +250,15 @@ class VailScraper:
                     await self._database.commit()
 
             page_id += 1
+    async def _retry_get_player_info(self, user_id: str) -> AccelBytePlayerInfo | None:
+        for i in range(3):
+            try:
+                return await self._vail_client.get_accelbyte_user_info(
+                    user_id
+                )
+            except ExternalServiceError as error:
+                if error.status == 500:
+                    continue
+                raise
+        else:
+            raise error # type: ignore

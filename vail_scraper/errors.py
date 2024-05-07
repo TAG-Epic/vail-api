@@ -1,4 +1,5 @@
 from enum import IntEnum, StrEnum
+from typing import Final
 from yarl import URL
 
 
@@ -44,4 +45,7 @@ class Service(StrEnum):
 
 class ExternalServiceError(Exception):
     def __init__(self, service: Service, status: int, message: str) -> None:
+        self.service: Final[Service] = service
+        self.status: Final[int] = status
+        self.message: Final[str] = message
         super().__init__(f"{service}({status}): {message}")
