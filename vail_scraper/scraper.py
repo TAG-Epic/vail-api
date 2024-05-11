@@ -223,9 +223,13 @@ class VailScraper:
                 assert (
                     user_info is not None
                 ), "user info missing even though it was on the leaderboard"
-                user_stats = await self._vail_client.get_accelbyte_user_stats(
-                    leaderboard_stat.user_id
-                )
+                try:
+                    user_stats = await self._vail_client.get_accelbyte_user_stats(
+                        leaderboard_stat.user_id
+                    )
+                except ExternalServiceError as error:
+                    _logger.error("failed to fetch the stats of %s", leaderboard_stat.user_id)
+                    continue
                 assert (
                     user_stats is not None
                 ), "user stats missing even though it was on the leaderboard"
