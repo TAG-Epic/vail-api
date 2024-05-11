@@ -217,7 +217,7 @@ class VailScraper:
                 except ExternalServiceError as error:
                     if error.status == 500:
                         # Bugged user, not possible to view!
-                        _logger.warn("skipped bugged user %s", leaderboard_stat.user_id)
+                        _logger.warn("skipped bugged user %s", leaderboard_stat.user_id, exc_info=True)
                         continue
                     raise
                 assert (
@@ -228,7 +228,7 @@ class VailScraper:
                         leaderboard_stat.user_id
                     )
                 except ExternalServiceError as error:
-                    _logger.error("failed to fetch the stats of %s", leaderboard_stat.user_id)
+                    _logger.warn("failed to fetch the stats of %s", leaderboard_stat.user_id, exc_info=True)
                     continue
                 assert (
                     user_stats is not None
