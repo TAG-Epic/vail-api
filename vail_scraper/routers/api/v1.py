@@ -7,11 +7,12 @@ from ...models import AccelByteStatCode
 from ...errors import APIErrorCode
 from ... import app_keys
 from ...utils.rate_limit import rate_limit_http
+from ...utils.cors import api_cors 
 
 router = web.RouteTableDef()
 
-
 @router.get("/api/v1/users/search")
+@api_cors
 async def search_user(request: web.Request) -> web.StreamResponse:
     database = request.app[app_keys.DATABASE]
 
@@ -50,6 +51,7 @@ async def search_user(request: web.Request) -> web.StreamResponse:
 
 
 @router.get("/api/v1/users/{id}")
+@api_cors
 async def get_user(request: web.Request) -> web.StreamResponse:
     database = request.app[app_keys.DATABASE]
 
@@ -69,6 +71,7 @@ async def get_user(request: web.Request) -> web.StreamResponse:
 
 
 @router.get("/api/v1/users/{user_id}/stats")
+@api_cors
 @rate_limit_http(lambda: TimesPerRateLimiter(5, 5))
 async def get_stats_for_user(request: web.Request) -> web.StreamResponse:
     vail_client = request.app[app_keys.VAIL_CLIENT]
