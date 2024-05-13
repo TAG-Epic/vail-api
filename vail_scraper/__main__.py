@@ -22,7 +22,6 @@ app = web.Application()
 
 # Register routers
 app.add_routes(raw_router)
-app.add_routes(prometheus_router)
 app.add_routes(api_v1_router)
 app.add_routes(api_v2_router)
 
