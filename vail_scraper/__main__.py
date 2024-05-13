@@ -4,6 +4,7 @@ import logging
 import aiosqlite
 from aiohttp import web
 
+from .database.quest import QuestDBWrapper
 from .client import VailClient
 from .utils.exclusive_lock import ExclusiveLock
 from .config import load_config
@@ -11,7 +12,6 @@ from .database.migration_manager import do_migrations
 from . import app_keys
 from .scraper import VailScraper
 from .routers.raw import router as raw_router
-from .routers.prometheus import router as prometheus_router
 from .routers.api.v1 import router as api_v1_router
 from .routers.api.v2 import router as api_v2_router
 
@@ -30,7 +30,7 @@ async def main() -> None:
     config = load_config()
     database_lock = ExclusiveLock()
 
-    database = await aiosqlite.connect(config.database_url)
+    database = await aiosqlite.connect(config.database.sqlite_url)
     database.row_factory = aiosqlite.Row
     _logger.info("doing migrations")
     await do_migrations(database)
@@ -42,6 +42,7 @@ async def main() -> None:
         database, database_lock, app[app_keys.VAIL_CLIENT], config
     )
     app[app_keys.DATABASE_LOCK] = database_lock
+    app[app_keys.QUEST_DB] = QuestDBWrapper(config.database.quest_url)
 
     if config.enabled:
         asyncio.create_task(app[app_keys.SCRAPER].run())

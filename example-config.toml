@@ -2,8 +2,6 @@ mode = "scraper"
 enabled = true
 user_agent = "VailGrafanaScraper v/1.0 (contact info here)"
 
-database_url = "/opt/data/db.sqlite"
-
 [rate_limiter]
 times = 2
 per = 3
@@ -15,3 +13,7 @@ password = ""
 [bans]
 aexlab = false
 accelbyte = false
+
+[database]
+sqlite_url = "/opt/data/db.sqlite"
+quest_url = "http://questdb:9000"

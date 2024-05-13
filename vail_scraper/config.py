@@ -20,6 +20,10 @@ class BansConfig(BaseModel):
     aexlab: bool = False
     accelbyte: bool = False
 
+class DatabaseConfig(BaseModel):
+    sqlite_url: str
+    quest_url: str
+
 
 class ScraperConfig(BaseModel):
     mode: typing.Literal["scraper"] = "scraper"
@@ -29,7 +33,7 @@ class ScraperConfig(BaseModel):
     bans: BansConfig
     user: ScraperUserConfig
     rate_limiter: RateLimitConfig
-    database_url: str
+    database: DatabaseConfig
 
 
 def load_config() -> ScraperConfig:

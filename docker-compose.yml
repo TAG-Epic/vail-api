@@ -10,6 +10,17 @@ services:
 
     volumes:
       - vail_scraper:/opt/data
+  questdb:
+    image: questdb/questdb:7.4.2
+    ports:
+      - 10003:9000 # Web and API
+      - 10004:8812 # Postgres
+    volumes:
+      - questdb:/var/lib/questdb
+    env_file:
+      - questdb.env
+
 
 volumes:
   vail_scraper:
+  questdb:
