@@ -17,8 +17,6 @@ services:
       - 10004:8812 # Postgres
     volumes:
       - questdb:/var/lib/questdb
-    env_file:
-      - questdb.env
 
 
 volumes:

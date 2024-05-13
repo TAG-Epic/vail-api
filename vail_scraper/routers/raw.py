@@ -15,9 +15,9 @@ async def download_db(request: web.Request) -> web.StreamResponse:
     config = request.app[app_keys.CONFIG]
     database_lock = request.app[app_keys.DATABASE_LOCK]
 
-    if config.database_url != ":memory:":
+    if config.database.sqlite_url != ":memory:":
         async with database_lock.exclusive():
-            response = web.FileResponse(config.database_url)
+            response = web.FileResponse(config.database.sqlite_url)
             await response.prepare(request)
             return response
 
