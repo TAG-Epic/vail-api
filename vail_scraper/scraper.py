@@ -6,7 +6,8 @@ from aiohttp import ClientSession
 from slowstack.asynchronous.times_per import TimesPerRateLimiter
 
 from .database.quest import QuestDBWrapper
-from .models import AccelBytePlayerInfo, AccelByteStatCode, AexlabStatCode
+from .models.accelbyte import AccelBytePlayerInfo, AccelByteStatCode
+from .models.aexlab import AexLabStatCode
 from .client.accelbyte import AccelByteClient
 from .client.aexlab import AexLabClient
 from .client.epic_games import EpicGamesClient
@@ -61,7 +62,7 @@ class VailScraper:
         while True:
             try:
                 page = await self._aexlab_client.get_leaderboard_page(
-                    AexlabStatCode.SCORE, page_id=page_id
+                    AexLabStatCode.SCORE, page_id=page_id
                 )
             except NoContentPageBug:
                 _logger.error("no content page bug on aexlab xp!")
@@ -111,7 +112,7 @@ class VailScraper:
         while True:
             try:
                 page = await self._aexlab_client.get_leaderboard_page(
-                    AexlabStatCode.CTO_RECOVERS, page_id=page_id
+                    AexLabStatCode.CTO_RECOVERS, page_id=page_id
                 )
             except NoContentPageBug:
                 _logger.error("no content page bug on aexlab cto steal!")
@@ -161,7 +162,7 @@ class VailScraper:
         while True:
             try:
                 page = await self._aexlab_client.get_leaderboard_page(
-                    AexlabStatCode.CTO_RECOVERS, page_id=page_id
+                    AexLabStatCode.CTO_RECOVERS, page_id=page_id
                 )
             except NoContentPageBug:
                 _logger.error("no content page bug on aexlab cto recover!")

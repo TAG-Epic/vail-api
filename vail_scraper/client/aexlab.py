@@ -1,7 +1,7 @@
 from logging import getLogger
 
 from ..errors import NoContentPageBug
-from ..models import AexlabLeaderboardPage, AexlabLeaderboardPlayer, AexlabStatCode
+from ..models.aexlab import AexlabLeaderboardPage, AexLabLeaderboardPlayer, AexLabStatCode
 from ..config import ScraperConfig
 from .base import BaseService
 
@@ -14,12 +14,12 @@ class AexLabClient(BaseService):
 
     async def get_leaderboard_page(
         self,
-        stat_code: AexlabStatCode,
+        stat_code: AexLabStatCode,
         *,
         page_id: int = 0,
         page_size: int = 100,
         priority: int = 0,
-    ) -> list[AexlabLeaderboardPlayer]:
+    ) -> list[AexLabLeaderboardPlayer]:
         session = await self.get_session()
         with self._circuit_breaker:
             async with self._rate_limiter.acquire(priority=priority):

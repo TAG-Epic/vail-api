@@ -3,7 +3,7 @@ import time
 from aiohttp import web
 from slowstack.asynchronous.times_per import TimesPerRateLimiter
 
-from ...models import AccelByteStatCode
+from ...models.accelbyte import AccelByteStatCode
 from ...errors import APIErrorCode
 from ... import app_keys
 from ...utils.rate_limit import rate_limit_http

@@ -39,3 +39,4 @@ class EpicGamesClient(BaseService):
             data = await response.json()
 
         return data["access_token"]
+

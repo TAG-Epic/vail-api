@@ -11,7 +11,7 @@ from yarl import URL
 from urllib.parse import quote
 
 from ..errors import AccelByteErrorCode
-from ..models import (
+from ..models.accelbyte import (
     AccelByteLeaderboardPage,
     AccelByteLeaderboardPlayer,
     AccelBytePlayerInfo,
