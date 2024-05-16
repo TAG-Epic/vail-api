@@ -37,12 +37,12 @@ async def main() -> None:
 
     app[app_keys.CONFIG] = config
     app[app_keys.DATABASE] = database
+    app[app_keys.QUEST_DB] = QuestDBWrapper(config.database.quest_url)
     app[app_keys.VAIL_CLIENT] = VailClient(config)
     app[app_keys.SCRAPER] = VailScraper(
-        database, database_lock, app[app_keys.VAIL_CLIENT], config
+        database, database_lock, app[app_keys.QUEST_DB], app[app_keys.VAIL_CLIENT], config
     )
     app[app_keys.DATABASE_LOCK] = database_lock
-    app[app_keys.QUEST_DB] = QuestDBWrapper(config.database.quest_url)
 
     if config.enabled:
         asyncio.create_task(app[app_keys.SCRAPER].run())

@@ -5,6 +5,7 @@ import time
 from aiohttp import ClientSession
 from slowstack.asynchronous.times_per import TimesPerRateLimiter
 
+from .database.quest import QuestDBWrapper
 from .models import AccelBytePlayerInfo, AccelByteStatCode, AexlabStatCode
 from .client import VailClient
 from .utils.circuit_breaker import CircuitBreaker
@@ -20,6 +21,7 @@ class VailScraper:
         self,
         database: aiosqlite.Connection,
         database_lock: ExclusiveLock,
+        quest_db: QuestDBWrapper,
         vail_client: VailClient,
         config: ScraperConfig,
     ) -> None:
@@ -33,6 +35,7 @@ class VailScraper:
         self.circuit_breaker: CircuitBreaker = CircuitBreaker(5, 10)
         self._database: aiosqlite.Connection = database
         self._database_lock: ExclusiveLock = database_lock
+        self._quest_db: QuestDBWrapper = quest_db
         self._vail_client: VailClient = vail_client
         self._config: ScraperConfig = config
 
@@ -234,6 +237,9 @@ class VailScraper:
                     user_stats is not None
                 ), "user stats missing even though it was on the leaderboard"
                 scraped_at = time.time()
+                
+                await self._quest_db.ingest_user_stats(leaderboard_stat.user_id, user_stats)
+
                 async with self._database_lock.shared():
                     await self._database.execute(
                         "insert or replace into users (id, name) values (?, ?)",
