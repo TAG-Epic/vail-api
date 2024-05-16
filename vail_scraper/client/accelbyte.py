@@ -1,74 +1,41 @@
-import json
+import asyncio
 from logging import getLogger
 import typing
-import time
-import hashlib
 from uuid import uuid4
-import base64
 import secrets
-import asyncio
+import base64
+import hashlib
+import json
+import aiohttp
 from yarl import URL
 from urllib.parse import quote
-from pprint import pprint
 
-from slowstack.asynchronous.times_per import TimesPerRateLimiter
-import aiohttp
-
-from vail_scraper.enums import RequestPriority
-
-from .errors import AccelByteErrorCode, ExternalServiceError, NoContentPageBug, Service
-from .models import (
+from ..errors import AccelByteErrorCode
+from ..models import (
     AccelByteLeaderboardPage,
     AccelByteLeaderboardPlayer,
     AccelBytePlayerInfo,
     AccelBytePlayerStatItemsPage,
-    AexlabLeaderboardPage,
-    AexlabLeaderboardPlayer,
     AccelByteStatCode,
-    AexlabStatCode,
 )
-from .utils.circuit_breaker import CircuitBreaker
-from .config import ScraperConfig
+from ..enums import RequestPriority
+from ..config import ScraperConfig
+from .base import BaseService, TOKEN_MARGIN_SECONDS, get_token_expiry_in_seconds
 
-_CLIENT_ID: str = "8e1fbe68aef14404882e88358be5536b"
-_TOKEN_MARGIN_SECONDS: float = 2
 _logger = getLogger(__name__)
 
+_CLIENT_ID: str = "8e1fbe68aef14404882e88358be5536b"
 
-class VailClient:
-    def __init__(self, scraper_config: ScraperConfig) -> None:
-        self._session: aiohttp.ClientSession | None = None
-        self._config: ScraperConfig = scraper_config
-        self._rate_limiter: TimesPerRateLimiter = TimesPerRateLimiter(
-            scraper_config.rate_limiter.times, scraper_config.rate_limiter.per
-        )
-        self._circuit_breaker: CircuitBreaker = CircuitBreaker(5, 60)
+
+class AccelByteClient(BaseService):
+    def __init__(self, config: ScraperConfig) -> None:
+        super().__init__(config)
         self._token_lock: asyncio.Lock = asyncio.Lock()
         self._refresh_token: str | None = None
         self._access_token: str | None = None
 
-    async def _get_session(self) -> aiohttp.ClientSession:
-        if self._session is None:
-            self._session = aiohttp.ClientSession(
-                headers={"Bot": "true", "User-Agent": self._config.user_agent}
-            )
-        return self._session
-
-    async def _request(
-        self,
-        method: typing.Literal["GET", "POST", "PATCH", "DELETE"],
-        url: str,
-        *,
-        priority: int = 0,
-        **kwargs: typing.Any,
-    ) -> aiohttp.ClientResponse:
-        session = await self._get_session()
-        with self._circuit_breaker:
-            async with self._rate_limiter.acquire(priority=priority):
-                return await session.request(method, url, **kwargs)
-
     async def _get_refresh_token(self) -> tuple[str, str]:
-        session = await self._get_session()
+        session = await self.get_session()
 
         challenge_verifier = secrets.token_urlsafe(50)
         challenge = (
@@ -154,49 +121,29 @@ class VailClient:
 
         return data["refresh_token"], data["access_token"]
 
-    def _get_token_expiry_in_seconds(self, token: str) -> float:
-        header, body, signature = token.split(".")
-        del header, signature
-        body_data = json.loads(base64.b64decode(body + "=="))
-
-        expire_time = body_data["exp"] - time.time()
-        _logger.debug("token expires in %s", expire_time)
-        return expire_time
-
     async def _get_token(self) -> str:
         async with self._token_lock:
             if self._refresh_token is None or self._access_token is None:
                 _logger.debug("creating new refresh token due to none being saved")
-                self._refresh_token, self._access_token = (
-                    await self._get_refresh_token()
-                )
-            if (
-                self._get_token_expiry_in_seconds(self._refresh_token)
-                < _TOKEN_MARGIN_SECONDS
-            ):
+                (
+                    self._refresh_token,
+                    self._access_token,
+                ) = await self._get_refresh_token()
+            if get_token_expiry_in_seconds(self._refresh_token) < TOKEN_MARGIN_SECONDS:
                 _logger.debug("creating new refresh token as current expired")
-                self._refresh_token, self._access_token = (
-                    await self._get_refresh_token()
-                )
-            if (
-                self._get_token_expiry_in_seconds(self._access_token)
-                < _TOKEN_MARGIN_SECONDS
-            ):
+                (
+                    self._refresh_token,
+                    self._access_token,
+                ) = await self._get_refresh_token()
+            if get_token_expiry_in_seconds(self._access_token) < TOKEN_MARGIN_SECONDS:
                 _logger.debug("creating new access token as current expired")
                 # TODO: Actually refresh
-                self._refresh_token, self._access_token = (
-                    await self._get_refresh_token()
-                )
+                (
+                    self._refresh_token,
+                    self._access_token,
+                ) = await self._get_refresh_token()
 
         return self._access_token
-
-    async def _raise_for_status(self, response: aiohttp.ClientResponse):
-        if not response.ok:
-            raise ExternalServiceError(
-                Service.get_from_url(response.url),
-                response.status,
-                await response.text(),
-            )
 
     async def _do_authenticated_request(
         self,
@@ -214,7 +161,7 @@ class VailClient:
             with self._circuit_breaker:
                 async with self._rate_limiter.acquire(priority=priority):
                     acquired_rate_limiter_event.set()
-                    session = await self._get_session()
+                    session = await self.get_session()
                     mixed_headers = {"Authorization": f"Bearer {token}", **headers}
                     return await session.request(
                         method, *args, **kwargs, headers=mixed_headers
@@ -224,9 +171,9 @@ class VailClient:
             token = await self._get_token()
             do_request_task = asyncio.create_task(_do_request())
 
-            jwt_expires_after_seconds = self._get_token_expiry_in_seconds(token)
+            jwt_expires_after_seconds = get_token_expiry_in_seconds(token)
             wait_for_jwt_expire_task = asyncio.create_task(
-                asyncio.sleep(jwt_expires_after_seconds - _TOKEN_MARGIN_SECONDS)
+                asyncio.sleep(jwt_expires_after_seconds - TOKEN_MARGIN_SECONDS)
             )
             wait_for_rate_limit_spot_task = asyncio.create_task(
                 acquired_rate_limiter_event.wait()
@@ -244,34 +191,7 @@ class VailClient:
                 do_request_task.cancel()
                 wait_for_rate_limit_spot_task.cancel()
 
-    async def get_aexlab_leaderboard_page(
-        self,
-        stat_code: AexlabStatCode,
-        *,
-        page_id: int = 0,
-        page_size: int = 100,
-        priority: int = 0,
-    ) -> list[AexlabLeaderboardPlayer]:
-        session = await self._get_session()
-        with self._circuit_breaker:
-            async with self._rate_limiter.acquire(priority=priority):
-                response = await session.get(
-                    "https://aexlab.com/api/leaderboard",
-                    params={
-                        "leaderboardCode": stat_code,
-                        "page": page_id + 1,
-                        "pageLimit": page_size,
-                    },
-                )
-            if response.status == 204:
-                _logger.warn("204 page!")
-                raise NoContentPageBug()
-            await self._raise_for_status(response)
-            data = await response.text()
-            page = AexlabLeaderboardPage.validate_json(data)
-            return page
-
-    async def get_accelbyte_leaderboard_page(
+    async def get_leaderboard_page(
         self,
         stat_code: AccelByteStatCode,
         *,
@@ -285,12 +205,12 @@ class VailClient:
             params={"limit": page_size, "offset": page_id * page_size},
             priority=priority,
         )
-        await self._raise_for_status(response)
+        await self.raise_for_status(response)
         data = await response.text()
         page = AccelByteLeaderboardPage.model_validate_json(data)
         return page.data
 
-    async def get_accelbyte_user_stats(
+    async def get_user_stats(
         self, user_id: str, *, priority: int = 0
     ) -> dict[str, float] | None:
         response = await self._do_authenticated_request(
@@ -309,13 +229,13 @@ class VailClient:
             ):
                 return None
 
-        await self._raise_for_status(response)
+        await self.raise_for_status(response)
         data = await response.text()
 
         page = AccelBytePlayerStatItemsPage.model_validate_json(data)
         return {stat_item.stat_code: stat_item.value for stat_item in page.data}
 
-    async def get_accelbyte_user_info(
+    async def get_user_info(
         self, user_id: str, *, priority: int = 0
     ) -> AccelBytePlayerInfo | None:
         response = await self._do_authenticated_request(
@@ -333,7 +253,7 @@ class VailClient:
             ):
                 return None
 
-        await self._raise_for_status(response)
+        await self.raise_for_status(response)
         data = await response.text()
         user = AccelBytePlayerInfo.model_validate_json(data)
         return user

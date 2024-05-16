@@ -20,6 +20,7 @@ class BansConfig(BaseModel):
     aexlab: bool = False
     accelbyte: bool = False
 
+
 class DatabaseConfig(BaseModel):
     sqlite_url: str
     quest_url: str

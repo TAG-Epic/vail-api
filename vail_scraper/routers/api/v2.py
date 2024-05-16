@@ -75,7 +75,6 @@ async def get_user(request: web.Request) -> web.StreamResponse:
     return web.json_response({"id": request.match_info["id"], "name": row["name"]})
 
 
-
 @router.get("/api/v2/users/{user_id}/stats")
 @api_cors
 @rate_limit_http(lambda: TimesPerRateLimiter(5, 5))
@@ -94,21 +93,32 @@ async def get_stats_for_user_v2(request: web.Request) -> web.StreamResponse:
             {"detail": "user not found", "code": APIErrorCode.USER_NOT_FOUND},
             status=410,
         )
-    
+
     # Store to DB
     scraped_at = time.time()
     async with database_lock.shared():
-        await database.executemany("insert or replace into stats (code, user_id, value, updated_at) values (?, ?, ?, ?)", [(stat_code, user_id, value, scraped_at) for stat_code, value in user_stats.items()])
+        await database.executemany(
+            "insert or replace into stats (code, user_id, value, updated_at) values (?, ?, ?, ?)",
+            [
+                (stat_code, user_id, value, scraped_at)
+                for stat_code, value in user_stats.items()
+            ],
+        )
 
     # Removed stat codes
-    result = await database.execute("select code from stats where user_id = ?", [user_id])
+    result = await database.execute(
+        "select code from stats where user_id = ?", [user_id]
+    )
     removed_stat_codes = []
     for row in await result.fetchall():
         stat_code = row[0]
         if stat_code not in user_stats.keys():
             removed_stat_codes.append(stat_code)
 
-    await database.executemany("delete from stats where user_id = ? and code = ?", [(user_id, removed_stat_code) for removed_stat_code in removed_stat_codes])
+    await database.executemany(
+        "delete from stats where user_id = ? and code = ?",
+        [(user_id, removed_stat_code) for removed_stat_code in removed_stat_codes],
+    )
     await database.commit()
 
     # Generate weapon stats
@@ -116,7 +126,9 @@ async def get_stats_for_user_v2(request: web.Request) -> web.StreamResponse:
         "kanto": {
             "kills": {
                 "total": int(user_stats.get(AccelByteStatCode.WEAPON_KANTO_KILLS, 0)),
-                "headshot_kills": int(user_stats.get(AccelByteStatCode.WEAPON_KANTO_HEADSHOT_KILLS, 0))
+                "headshot_kills": int(
+                    user_stats.get(AccelByteStatCode.WEAPON_KANTO_HEADSHOT_KILLS, 0)
+                ),
             }
         }
     }
@@ -129,14 +141,14 @@ async def get_stats_for_user_v2(request: web.Request) -> web.StreamResponse:
         weapon_type = stat_code.split("-")[1]
         generic_weapon_types.add(weapon_type)
     _logger.debug("weapon types: %s", generic_weapon_types)
-    generic_weapon_types.remove("kanto") # Special
+    generic_weapon_types.remove("kanto")  # Special
 
     for weapon_type in generic_weapon_types:
         prefix = f"weapon-{weapon_type}"
         weapons[weapon_type] = {
             "kills": {
                 "total": int(user_stats.get(f"{prefix}-kills", 0)),
-                "headshot_kills": int(user_stats.get(f"{prefix}-headshot-kills", 0))
+                "headshot_kills": int(user_stats.get(f"{prefix}-headshot-kills", 0)),
             },
             "shots": {
                 "fired": int(user_stats.get(f"{prefix}-shots-fired", 0)),
@@ -145,8 +157,8 @@ async def get_stats_for_user_v2(request: web.Request) -> web.StreamResponse:
                     "arm": int(user_stats.get(f"{prefix}-shots-hit-arm", 0)),
                     "body": int(user_stats.get(f"{prefix}-shots-hit-body", 0)),
                     "head": int(user_stats.get(f"{prefix}-shots-hit-head", 0)),
-                }
-            }
+                },
+            },
         }
 
     # Generate map stats
@@ -158,7 +170,7 @@ async def get_stats_for_user_v2(request: web.Request) -> web.StreamResponse:
         map_name = stat_code.split("-")[1]
         map_types.add(map_name)
     _logger.debug("map types: %s", map_types)
-    
+
     maps: dict[str, Any] = {}
     for map_type in map_types:
         prefix = f"map-{map_type}"
@@ -168,10 +180,8 @@ async def get_stats_for_user_v2(request: web.Request) -> web.StreamResponse:
                 "losses": int(user_stats.get(f"{prefix}-games-lost", 0)),
                 "draws": int(user_stats.get(f"{prefix}-games-drawn", 0)),
                 "abandons": int(user_stats.get(f"{prefix}-games-abandoned", 0)),
-            } 
+            }
         }
-
-
 
     return web.json_response(
         {

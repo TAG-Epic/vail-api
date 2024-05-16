@@ -15,7 +15,7 @@ MIGRATIONS: list[BaseMigration] = [
     CreateStatsTableMigration(),
     AddCTOScoresMigration(),
     CTOScoresMissingPKeyMigration(),
-    SaveStatsIndependentlyMigration()
+    SaveStatsIndependentlyMigration(),
 ]
 
 

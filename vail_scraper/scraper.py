@@ -7,7 +7,9 @@ from slowstack.asynchronous.times_per import TimesPerRateLimiter
 
 from .database.quest import QuestDBWrapper
 from .models import AccelBytePlayerInfo, AccelByteStatCode, AexlabStatCode
-from .client import VailClient
+from .client.accelbyte import AccelByteClient
+from .client.aexlab import AexLabClient
+from .client.epic_games import EpicGamesClient
 from .utils.circuit_breaker import CircuitBreaker
 from .utils.exclusive_lock import ExclusiveLock
 from .config import ScraperConfig
@@ -22,7 +24,9 @@ class VailScraper:
         database: aiosqlite.Connection,
         database_lock: ExclusiveLock,
         quest_db: QuestDBWrapper,
-        vail_client: VailClient,
+        accel_byte_client: AccelByteClient,
+        aexlab_client: AexLabClient,
+        epic_games_client: EpicGamesClient,
         config: ScraperConfig,
     ) -> None:
         self._session: ClientSession = ClientSession(
@@ -36,7 +40,9 @@ class VailScraper:
         self._database: aiosqlite.Connection = database
         self._database_lock: ExclusiveLock = database_lock
         self._quest_db: QuestDBWrapper = quest_db
-        self._vail_client: VailClient = vail_client
+        self._accel_byte_client: AccelByteClient = accel_byte_client
+        self._aexlab_client: AexLabClient = aexlab_client
+        self._epic_games_client: EpicGamesClient = epic_games_client
         self._config: ScraperConfig = config
 
     async def run(self) -> None:
@@ -54,7 +60,7 @@ class VailScraper:
         page_id = 0
         while True:
             try:
-                page = await self._vail_client.get_aexlab_leaderboard_page(
+                page = await self._aexlab_client.get_leaderboard_page(
                     AexlabStatCode.SCORE, page_id=page_id
                 )
             except NoContentPageBug:
@@ -87,12 +93,15 @@ class VailScraper:
                         AccelByteStatCode.KILLS: user.stats.kills,
                         AccelByteStatCode.ASSISTS: user.stats.assists,
                         AccelByteStatCode.DEATHS: user.stats.deaths,
-                        AccelByteStatCode.GAMEMODE_CTO_STEALS: user.point
+                        AccelByteStatCode.GAMEMODE_CTO_STEALS: user.point,
                     }
 
                     for stat_code, value in stats.items():
                         rows.append((user.user_id, stat_code, value, page_scraped_at))
-                await self._database.executemany("insert or replace into stats (user_id, code, value, updated_at) values (?, ?, ?, ?)", rows)
+                await self._database.executemany(
+                    "insert or replace into stats (user_id, code, value, updated_at) values (?, ?, ?, ?)",
+                    rows,
+                )
                 await self._database.commit()
 
             page_id += 1
@@ -101,7 +110,7 @@ class VailScraper:
         page_id = 0
         while True:
             try:
-                page = await self._vail_client.get_aexlab_leaderboard_page(
+                page = await self._aexlab_client.get_leaderboard_page(
                     AexlabStatCode.CTO_RECOVERS, page_id=page_id
                 )
             except NoContentPageBug:
@@ -134,12 +143,15 @@ class VailScraper:
                         AccelByteStatCode.KILLS: user.stats.kills,
                         AccelByteStatCode.ASSISTS: user.stats.assists,
                         AccelByteStatCode.DEATHS: user.stats.deaths,
-                        AccelByteStatCode.GAMEMODE_CTO_STEALS: user.point
+                        AccelByteStatCode.GAMEMODE_CTO_STEALS: user.point,
                     }
 
                     for stat_code, value in stats.items():
                         rows.append((user.user_id, stat_code, value, page_scraped_at))
-                await self._database.executemany("insert or replace into stats (user_id, code, value, updated_at) values (?, ?, ?, ?)", rows)
+                await self._database.executemany(
+                    "insert or replace into stats (user_id, code, value, updated_at) values (?, ?, ?, ?)",
+                    rows,
+                )
                 await self._database.commit()
 
             page_id += 1
@@ -148,7 +160,7 @@ class VailScraper:
         page_id = 0
         while True:
             try:
-                page = await self._vail_client.get_aexlab_leaderboard_page(
+                page = await self._aexlab_client.get_leaderboard_page(
                     AexlabStatCode.CTO_RECOVERS, page_id=page_id
                 )
             except NoContentPageBug:
@@ -181,12 +193,15 @@ class VailScraper:
                         AccelByteStatCode.KILLS: user.stats.kills,
                         AccelByteStatCode.ASSISTS: user.stats.assists,
                         AccelByteStatCode.DEATHS: user.stats.deaths,
-                        AccelByteStatCode.GAMEMODE_CTO_RECOVERS: user.point
+                        AccelByteStatCode.GAMEMODE_CTO_RECOVERS: user.point,
                     }
 
                     for stat_code, value in stats.items():
                         rows.append((user.user_id, stat_code, value, page_scraped_at))
-                await self._database.executemany("insert or replace into stats (user_id, code, value, updated_at) values (?, ?, ?, ?)", rows)
+                await self._database.executemany(
+                    "insert or replace into stats (user_id, code, value, updated_at) values (?, ?, ?, ?)",
+                    rows,
+                )
                 await self._database.commit()
 
             page_id += 1
@@ -195,7 +210,7 @@ class VailScraper:
         page_id = 0
         while True:
             try:
-                page = await self._vail_client.get_accelbyte_leaderboard_page(
+                page = await self._accel_byte_client.get_leaderboard_page(
                     AccelByteStatCode.SCORE, page_id=page_id
                 )
             except NoContentPageBug:
@@ -220,55 +235,79 @@ class VailScraper:
                 except ExternalServiceError as error:
                     if error.status == 500:
                         # Bugged user, not possible to view!
-                        _logger.warn("skipped bugged user %s", leaderboard_stat.user_id, exc_info=True)
+                        _logger.warn(
+                            "skipped bugged user %s",
+                            leaderboard_stat.user_id,
+                            exc_info=True,
+                        )
                         continue
                     raise
                 assert (
                     user_info is not None
                 ), "user info missing even though it was on the leaderboard"
                 try:
-                    user_stats = await self._vail_client.get_accelbyte_user_stats(
+                    user_stats = await self._accel_byte_client.get_user_stats(
                         leaderboard_stat.user_id
                     )
                 except ExternalServiceError as error:
-                    _logger.warn("failed to fetch the stats of %s", leaderboard_stat.user_id, exc_info=True)
+                    _logger.warn(
+                        "failed to fetch the stats of %s",
+                        leaderboard_stat.user_id,
+                        exc_info=True,
+                    )
                     continue
                 assert (
                     user_stats is not None
                 ), "user stats missing even though it was on the leaderboard"
                 scraped_at = time.time()
-                
-                await self._quest_db.ingest_user_stats(leaderboard_stat.user_id, user_stats)
+
+                await self._quest_db.ingest_user_stats(
+                    leaderboard_stat.user_id, user_stats
+                )
 
                 async with self._database_lock.shared():
                     await self._database.execute(
                         "insert or replace into users (id, name) values (?, ?)",
                         [leaderboard_stat.user_id, user_info.display_name],
                     )
-                    await self._database.executemany("insert or replace into stats (code, user_id, value, updated_at) values (?, ?, ?, ?)", [(stat_code, leaderboard_stat.user_id, value, scraped_at) for stat_code, value in user_stats.items()])
-                        
+                    await self._database.executemany(
+                        "insert or replace into stats (code, user_id, value, updated_at) values (?, ?, ?, ?)",
+                        [
+                            (stat_code, leaderboard_stat.user_id, value, scraped_at)
+                            for stat_code, value in user_stats.items()
+                        ],
+                    )
+
                     # Removed stat codes
-                    result = await self._database.execute("select code from stats where user_id = ?", [leaderboard_stat.user_id])
+                    result = await self._database.execute(
+                        "select code from stats where user_id = ?",
+                        [leaderboard_stat.user_id],
+                    )
                     removed_stat_codes = []
                     for row in await result.fetchall():
                         stat_code = row[0]
                         if stat_code not in user_stats.keys():
                             removed_stat_codes.append(stat_code)
 
-                    await self._database.executemany("delete from stats where user_id = ? and code = ?", [(leaderboard_stat.user_id, removed_stat_code) for removed_stat_code in removed_stat_codes])
+                    await self._database.executemany(
+                        "delete from stats where user_id = ? and code = ?",
+                        [
+                            (leaderboard_stat.user_id, removed_stat_code)
+                            for removed_stat_code in removed_stat_codes
+                        ],
+                    )
 
                     await self._database.commit()
 
             page_id += 1
+
     async def _retry_get_player_info(self, user_id: str) -> AccelBytePlayerInfo | None:
         for i in range(3):
             try:
-                return await self._vail_client.get_accelbyte_user_info(
-                    user_id
-                )
+                return await self._accel_byte_client.get_user_info(user_id)
             except ExternalServiceError as error:
                 if error.status == 500:
                     continue
                 raise
         else:
-            raise error # type: ignore
+            raise error  # type: ignore

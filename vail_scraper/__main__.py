@@ -4,8 +4,10 @@ import logging
 import aiosqlite
 from aiohttp import web
 
+from .client.accelbyte import AccelByteClient
+from .client.aexlab import AexLabClient
+from .client.epic_games import EpicGamesClient
 from .database.quest import QuestDBWrapper
-from .client import VailClient
 from .utils.exclusive_lock import ExclusiveLock
 from .config import load_config
 from .database.migration_manager import do_migrations
@@ -38,9 +40,17 @@ async def main() -> None:
     app[app_keys.CONFIG] = config
     app[app_keys.DATABASE] = database
     app[app_keys.QUEST_DB] = QuestDBWrapper(config.database.quest_url)
-    app[app_keys.VAIL_CLIENT] = VailClient(config)
+    app[app_keys.ACCEL_BYTE_CLIENT] = AccelByteClient(config)
+    app[app_keys.AEXLAB_CLIENT] = AexLabClient(config)
+    app[app_keys.EPIC_GAMES_CLIENT] = EpicGamesClient(config)
     app[app_keys.SCRAPER] = VailScraper(
-        database, database_lock, app[app_keys.QUEST_DB], app[app_keys.VAIL_CLIENT], config
+        database,
+        database_lock,
+        app[app_keys.QUEST_DB],
+        app[app_keys.ACCEL_BYTE_CLIENT],
+        app[app_keys.AEXLAB_CLIENT],
+        app[app_keys.EPIC_GAMES_CLIENT],
+        config,
     )
     app[app_keys.DATABASE_LOCK] = database_lock
 
