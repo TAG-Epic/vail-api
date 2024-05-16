@@ -79,13 +79,13 @@ async def get_user(request: web.Request) -> web.StreamResponse:
 @api_cors
 @rate_limit_http(lambda: TimesPerRateLimiter(5, 5))
 async def get_stats_for_user_v2(request: web.Request) -> web.StreamResponse:
-    vail_client = request.app[app_keys.VAIL_CLIENT]
+    vail_client = request.app[app_keys.ACCEL_BYTE_CLIENT]
     database = request.app[app_keys.DATABASE]
     database_lock = request.app[app_keys.DATABASE_LOCK]
 
     user_id = request.match_info["user_id"]
 
-    user_stats = await vail_client.get_accelbyte_user_stats(
+    user_stats = await vail_client.get_user_stats(
         user_id, priority=RequestPriority.HIGH
     )
     if user_stats is None:
