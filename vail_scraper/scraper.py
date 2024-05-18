@@ -243,9 +243,9 @@ class VailScraper:
                         )
                         continue
                     raise
-                assert (
-                    user_info is not None
-                ), "user info missing even though it was on the leaderboard"
+                if user_info is None:
+                    _logger.warning("user info is can't be fetched even though it is on the leaderboard for user id: %s", leaderboard_stat.user_id)
+                    continue
                 try:
                     user_stats = await self._accel_byte_client.get_user_stats(
                         leaderboard_stat.user_id
