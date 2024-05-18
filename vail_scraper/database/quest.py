@@ -47,7 +47,6 @@ class QuestDBWrapper:
             params={
                 "name": table_name,
                 "timestamp": "timestamp",
-                "overwrite": "true",
                 "fmt": "json",
             },
             data=form,
