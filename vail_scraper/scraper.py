@@ -3,7 +3,10 @@ from logging import getLogger
 import aiosqlite
 import time
 from aiohttp import ClientSession
+import traceback
+
 from slowstack.asynchronous.times_per import TimesPerRateLimiter
+from nextcore.http import HTTPClient, Route
 
 from .database.quest import QuestDBWrapper
 from .models.accelbyte import AccelBytePlayerInfo, AccelByteStatCode
@@ -44,9 +47,12 @@ class VailScraper:
         self._accel_byte_client: AccelByteClient = accel_byte_client
         self._aexlab_client: AexLabClient = aexlab_client
         self._epic_games_client: EpicGamesClient = epic_games_client
+        self._discord_client: HTTPClient = HTTPClient()
         self._config: ScraperConfig = config
 
     async def run(self) -> None:
+        await self._discord_client.setup()
+
         tasks: list[asyncio.Task[None]] = []
         if not self._config.bans.aexlab:
             tasks.append(asyncio.create_task(self._scrape_aexlab_xp_stats()))
@@ -54,8 +60,25 @@ class VailScraper:
             tasks.append(asyncio.create_task(self._scrape_aexlab_cto_recover_stats()))
         elif not self._config.bans.accelbyte:
             tasks.append(asyncio.create_task(self._scrape_accelbyte_stats()))
+        
+        try:
+            await asyncio.gather(*tasks)
+        except:
+            error_details = traceback.format_exc
 
-        await asyncio.gather(*tasks)
+            async with ClientSession() as session:
+                response = await session.post("https://workbin.dev/api/new", json={
+                    "content": error_details,
+                    "language": "python"
+                })
+                data = await response.json()
+                paste_url = f"https://workbin.dev/?id={data['key']}"
+
+            route = Route("POST", "/webhooks/{webhook_id}/{webhook_token}")
+            await self._discord_client.request(route, None, json={
+                "content": f"<@{self._config.alert_webhook.target_user}> your code sucks: {paste_url}"
+            })
+
 
     async def _scrape_aexlab_xp_stats(self) -> None:
         page_id = 0
@@ -233,16 +256,13 @@ class VailScraper:
                     user_info = await self._retry_get_player_info(
                         leaderboard_stat.user_id
                     )
-                except ExternalServiceError as error:
-                    if error.status == 500:
-                        # Bugged user, not possible to view!
-                        _logger.warn(
-                            "skipped bugged user %s",
-                            leaderboard_stat.user_id,
-                            exc_info=True,
-                        )
-                        continue
-                    raise
+                except ExternalServiceError:
+                    _logger.warn(
+                        "failed to fetch the info of user %s",
+                        leaderboard_stat.user_id,
+                        exc_info=True,
+                    )
+                    continue
                 if user_info is None:
                     _logger.warning("user info is can't be fetched even though it is on the leaderboard for user id: %s", leaderboard_stat.user_id)
                     continue
@@ -250,9 +270,9 @@ class VailScraper:
                     user_stats = await self._accel_byte_client.get_user_stats(
                         leaderboard_stat.user_id
                     )
-                except ExternalServiceError as error:
+                except ExternalServiceError:
                     _logger.warn(
-                        "failed to fetch the stats of %s",
+                        "failed to fetch the stats of user %s",
                         leaderboard_stat.user_id,
                         exc_info=True,
                     )

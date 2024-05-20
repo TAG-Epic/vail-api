@@ -25,6 +25,10 @@ class DatabaseConfig(BaseModel):
     sqlite_url: str
     quest_url: str
 
+class WebhookAlertConfig(BaseModel):
+    id: int
+    token: str
+    target_user: int
 
 class ScraperConfig(BaseModel):
     mode: typing.Literal["scraper"] = "scraper"
@@ -35,6 +39,7 @@ class ScraperConfig(BaseModel):
     user: ScraperUserConfig
     rate_limiter: RateLimitConfig
     database: DatabaseConfig
+    alert_webhook: WebhookAlertConfig
 
 
 def load_config() -> ScraperConfig:
