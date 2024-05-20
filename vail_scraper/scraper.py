@@ -74,6 +74,8 @@ class VailScraper:
 
     async def _fast_scrape_accelbyte_discoverer(self) -> None:
         page_id = 0
+        spotted_user_ids: list[str] = []
+        total_outdated_user_ids: list[str] = []
         while True:
             # Check if we need to fetch more items
             if len(self._user_ids_pending_scrape) > 50:
@@ -88,20 +90,38 @@ class VailScraper:
                 continue
 
             if len(leaderboard_page) == 0:
-                _logger.debug("finished checking @ page %s, starting up again in 10s", page_id)
-                await asyncio.sleep(10)
+                _logger.debug("finished checking @ page %s", page_id)
+
+                # Find users not spotted (aka moved up ranking while we checked)
+                result = await self._database.execute("select user_id from users")
+                rows = await result.fetchall()
+
+                for row in rows:
+                    user_id = row[0]
+
+                    if user_id not in spotted_user_ids:
+                        _logger.debug("didn't spot %s during leaderboard scrape, checking just to make sure!", user_id)
+                        self._user_ids_pending_scrape.add(user_id)
+
+                if len(total_outdated_user_ids) == 0:
+                    _logger.debug("no updates, sleeping for 10s")
+                    await asyncio.sleep(10)
                 page_id = 0
+                spotted_user_ids.clear()
+                total_outdated_user_ids.clear()
                 continue
 
             user_id_to_score: dict[str, int] = {user.user_id:user.point for user in leaderboard_page}
             outdated_users: list[str] = []
             
             for user in leaderboard_page:
+                spotted_user_ids.append(user.user_id)
                 result = await self._database.execute("select value from stats where user_id = ? and code = 'score'", [user.user_id])
                 row = await result.fetchone()
 
                 if row is None:
                     outdated_users.append(user.user_id)
+                    total_outdated_user_ids.append(user.user_id)
                     continue
                 stored_score = row[0]
                 if stored_score != user_id_to_score[user.user_id]:
