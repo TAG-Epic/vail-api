@@ -7,6 +7,7 @@ from .migrations.create_stats_table import CreateStatsTableMigration
 from .migrations.add_cto_scores import AddCTOScoresMigration
 from .migrations.cto_scores_missing_pkey import CTOScoresMissingPKeyMigration
 from .migrations.save_stats_independently import SaveStatsIndependentlyMigration
+from .migrations.add_indexes import AddIndexesMigration
 
 _logger = getLogger(__name__)
 
@@ -16,6 +17,7 @@ MIGRATIONS: list[BaseMigration] = [
     AddCTOScoresMigration(),
     CTOScoresMissingPKeyMigration(),
     SaveStatsIndependentlyMigration(),
+    AddIndexesMigration()
 ]
 
 
