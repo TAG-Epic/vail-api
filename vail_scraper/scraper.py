@@ -87,6 +87,12 @@ class VailScraper:
                 page_id += 1
                 continue
 
+            if len(leaderboard_page) == 0:
+                _logger.debug("finished checking @ page %s, starting up again in 10s", page_id)
+                await asyncio.sleep(10)
+                page_id = 0
+                continue
+
             user_id_to_score: dict[str, int] = {user.user_id:user.point for user in leaderboard_page}
             outdated_users: list[str] = []
             
