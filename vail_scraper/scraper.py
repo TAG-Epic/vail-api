@@ -8,11 +8,11 @@ import traceback
 from slowstack.asynchronous.times_per import TimesPerRateLimiter
 from nextcore.http import HTTPClient, Route
 
+from vail_scraper.utils.unique_queue import UniqueQueue
+
 from .database.quest import QuestDBWrapper
 from .models.accelbyte import AccelBytePlayerInfo, AccelByteStatCode
-from .models.aexlab import AexLabStatCode
 from .client.accelbyte import AccelByteClient
-from .client.aexlab import AexLabClient
 from .client.epic_games import EpicGamesClient
 from .utils.circuit_breaker import CircuitBreaker
 from .utils.exclusive_lock import ExclusiveLock
@@ -29,14 +29,9 @@ class VailScraper:
         database_lock: ExclusiveLock,
         quest_db: QuestDBWrapper,
         accel_byte_client: AccelByteClient,
-        aexlab_client: AexLabClient,
         epic_games_client: EpicGamesClient,
         config: ScraperConfig,
     ) -> None:
-        self._session: ClientSession = ClientSession(
-            headers={"User-Agent": config.user_agent, "Bot": "true"},
-            base_url="https://aexlab.com",
-        )
         self._rate_limiter: TimesPerRateLimiter = TimesPerRateLimiter(
             config.rate_limiter.times, config.rate_limiter.per
         )
@@ -45,26 +40,24 @@ class VailScraper:
         self._database_lock: ExclusiveLock = database_lock
         self._quest_db: QuestDBWrapper = quest_db
         self._accel_byte_client: AccelByteClient = accel_byte_client
-        self._aexlab_client: AexLabClient = aexlab_client
         self._epic_games_client: EpicGamesClient = epic_games_client
         self._discord_client: HTTPClient = HTTPClient()
         self._config: ScraperConfig = config
+
+        # Accel fast
+        self._user_ids_pending_scrape: UniqueQueue[str] = UniqueQueue()
 
     async def run(self) -> None:
         await self._discord_client.setup()
 
         tasks: list[asyncio.Task[None]] = []
-        if not self._config.bans.aexlab:
-            tasks.append(asyncio.create_task(self._scrape_aexlab_xp_stats()))
-            tasks.append(asyncio.create_task(self._scrape_aexlab_cto_steal_stats()))
-            tasks.append(asyncio.create_task(self._scrape_aexlab_cto_recover_stats()))
-        elif not self._config.bans.accelbyte:
-            tasks.append(asyncio.create_task(self._scrape_accelbyte_stats()))
-        
+        if not self._config.bans.accelbyte:
+            tasks.append(asyncio.create_task(self._fast_scrape_accelbyte_discoverer()))
+            tasks.append(asyncio.create_task(self._fast_scrape_accelbyte_updater()))
         try:
             await asyncio.gather(*tasks)
         except:
-            error_details = traceback.format_exc
+            error_details = traceback.format_exc()
 
             async with ClientSession() as session:
                 response = await session.post("https://workbin.dev/api/new", json={
@@ -79,248 +72,106 @@ class VailScraper:
                 "content": f"<@{self._config.alert_webhook.target_user}> your code sucks: {paste_url}"
             })
 
-
-    async def _scrape_aexlab_xp_stats(self) -> None:
+    async def _fast_scrape_accelbyte_discoverer(self) -> None:
         page_id = 0
         while True:
+            # Check if we need to fetch more items
+            if len(self._user_ids_pending_scrape) > 50:
+                await asyncio.sleep(10)
+                continue
+
             try:
-                page = await self._aexlab_client.get_leaderboard_page(
-                    AexLabStatCode.SCORE, page_id=page_id
-                )
-            except NoContentPageBug:
-                _logger.error("no content page bug on aexlab xp!")
+                leaderboard_page = await self._accel_byte_client.get_leaderboard_page(AccelByteStatCode.SCORE, page_id=page_id)
+            except ExternalServiceError:
+                _logger.error("failed to get leaderboard page %s, skipping for now", page_id, exc_info=True)
                 page_id += 1
                 continue
-            except:
-                _logger.exception("failed to fetch page")
-                continue
-            _logger.debug("scraped %s users (page %s)", len(page), page_id)
 
-            if len(page) == 0:
-                page_id = 0
-                _logger.debug("scanned through all pages, starting over again")
-                continue
+            user_id_to_score: dict[str, int] = {user.user_id:user.point for user in leaderboard_page}
+            outdated_users: list[str] = []
+            
+            for user in leaderboard_page:
+                result = await self._database.execute("select value from stats where user_id = ? and code = 'score'", [user.user_id])
+                row = await result.fetchone()
 
-            page_scraped_at = time.time()
+                if row is None:
+                    outdated_users.append(user.user_id)
+                    continue
+                stored_score = row[0]
+                if stored_score != user_id_to_score[user.user_id]:
+                    outdated_users.append(user.user_id)
+
+            _logger.debug("fetched page %s for fast-scraping (%s/%s outdated). %s/50 outdated users found", page_id, len(outdated_users), len(leaderboard_page), len(self._user_ids_pending_scrape))
+
+            for user_id in outdated_users:
+                self._user_ids_pending_scrape.add(user_id)
+
+            page_id += 1
+    async def _fast_scrape_accelbyte_updater(self) -> None:
+        while True:
+            user_id = await self._user_ids_pending_scrape.get_item()
+            try:
+                user_info = await self._retry_get_player_info(user_id)
+            except ExternalServiceError:
+                _logger.warn(
+                    "failed to fetch the info of user %s",
+                    user_id,
+                    exc_info=True,
+                )
+                continue
+            if user_info is None:
+                _logger.warn("user %s magically disappeared. Leaving it incase accelbyte did an oopsie", user_id)
+                continue
+            try:
+                user_stats = await self._accel_byte_client.get_user_stats(user_id)
+            except ExternalServiceError:
+                _logger.warn(
+                    "failed to fetch the stats of user %s",
+                    user_id,
+                    exc_info=True,
+                )
+                continue
+            assert user_stats is not None
+
+            scraped_at = time.time()
+
+            await self._quest_db.ingest_user_stats(
+                user_id, user_stats
+            )
             async with self._database_lock.shared():
-                await self._database.executemany(
+                await self._database.execute(
                     "insert or replace into users (id, name) values (?, ?)",
-                    [(user.user_id, user.display_name) for user in page],
+                    [user_id, user_info.display_name],
                 )
-                rows: list[tuple[str, str, int, float]] = []
-                for user in page:
-                    stats: dict[AccelByteStatCode, int] = {
-                        AccelByteStatCode.GAMES_WON: user.stats.won,
-                        AccelByteStatCode.GAMES_LOST: user.stats.lost,
-                        AccelByteStatCode.GAMES_DRAWN: user.stats.draws,
-                        AccelByteStatCode.GAMES_ABANDONED: user.stats.abandoned,
-                        AccelByteStatCode.KILLS: user.stats.kills,
-                        AccelByteStatCode.ASSISTS: user.stats.assists,
-                        AccelByteStatCode.DEATHS: user.stats.deaths,
-                        AccelByteStatCode.GAMEMODE_CTO_STEALS: user.point,
-                    }
-
-                    for stat_code, value in stats.items():
-                        rows.append((user.user_id, stat_code, value, page_scraped_at))
                 await self._database.executemany(
-                    "insert or replace into stats (user_id, code, value, updated_at) values (?, ?, ?, ?)",
-                    rows,
+                    "insert or replace into stats (code, user_id, value, updated_at) values (?, ?, ?, ?)",
+                    [
+                        (stat_code, user_id, value, scraped_at)
+                        for stat_code, value in user_stats.items()
+                    ],
                 )
+
+                # Removed stat codes
+                result = await self._database.execute(
+                    "select code from stats where user_id = ?",
+                    [user_id],
+                )
+                removed_stat_codes = []
+                for row in await result.fetchall():
+                    stat_code = row[0]
+                    if stat_code not in user_stats.keys():
+                        removed_stat_codes.append(stat_code)
+
+                await self._database.executemany(
+                    "delete from stats where user_id = ? and code = ?",
+                    [
+                        (user_id, removed_stat_code)
+                        for removed_stat_code in removed_stat_codes
+                    ],
+                )
+
                 await self._database.commit()
 
-            page_id += 1
-
-    async def _scrape_aexlab_cto_steal_stats(self) -> None:
-        page_id = 0
-        while True:
-            try:
-                page = await self._aexlab_client.get_leaderboard_page(
-                    AexLabStatCode.CTO_RECOVERS, page_id=page_id
-                )
-            except NoContentPageBug:
-                _logger.error("no content page bug on aexlab cto steal!")
-                page_id += 1
-                continue
-            except:
-                _logger.exception("failed to fetch page")
-                continue
-            _logger.debug("scraped %s users (page %s)", len(page), page_id)
-
-            if len(page) == 0:
-                page_id = 0
-                _logger.debug("scanned through all pages, starting over again")
-                continue
-
-            page_scraped_at = time.time()
-            async with self._database_lock.shared():
-                await self._database.executemany(
-                    "insert or replace into users (id, name) values (?, ?)",
-                    [(user.user_id, user.display_name) for user in page],
-                )
-                rows: list[tuple[str, str, int, float]] = []
-                for user in page:
-                    stats: dict[AccelByteStatCode, int] = {
-                        AccelByteStatCode.GAMES_WON: user.stats.won,
-                        AccelByteStatCode.GAMES_LOST: user.stats.lost,
-                        AccelByteStatCode.GAMES_DRAWN: user.stats.draws,
-                        AccelByteStatCode.GAMES_ABANDONED: user.stats.abandoned,
-                        AccelByteStatCode.KILLS: user.stats.kills,
-                        AccelByteStatCode.ASSISTS: user.stats.assists,
-                        AccelByteStatCode.DEATHS: user.stats.deaths,
-                        AccelByteStatCode.GAMEMODE_CTO_STEALS: user.point,
-                    }
-
-                    for stat_code, value in stats.items():
-                        rows.append((user.user_id, stat_code, value, page_scraped_at))
-                await self._database.executemany(
-                    "insert or replace into stats (user_id, code, value, updated_at) values (?, ?, ?, ?)",
-                    rows,
-                )
-                await self._database.commit()
-
-            page_id += 1
-
-    async def _scrape_aexlab_cto_recover_stats(self) -> None:
-        page_id = 0
-        while True:
-            try:
-                page = await self._aexlab_client.get_leaderboard_page(
-                    AexLabStatCode.CTO_RECOVERS, page_id=page_id
-                )
-            except NoContentPageBug:
-                _logger.error("no content page bug on aexlab cto recover!")
-                page_id += 1
-                continue
-            except:
-                _logger.exception("failed to fetch page")
-                continue
-            _logger.debug("scraped %s users (page %s)", len(page), page_id)
-
-            if len(page) == 0:
-                page_id = 0
-                _logger.debug("scanned through all pages, starting over again")
-                continue
-
-            page_scraped_at = time.time()
-            async with self._database_lock.shared():
-                await self._database.executemany(
-                    "insert or replace into users (id, name) values (?, ?)",
-                    [(user.user_id, user.display_name) for user in page],
-                )
-                rows: list[tuple[str, str, int, float]] = []
-                for user in page:
-                    stats: dict[AccelByteStatCode, int] = {
-                        AccelByteStatCode.GAMES_WON: user.stats.won,
-                        AccelByteStatCode.GAMES_LOST: user.stats.lost,
-                        AccelByteStatCode.GAMES_DRAWN: user.stats.draws,
-                        AccelByteStatCode.GAMES_ABANDONED: user.stats.abandoned,
-                        AccelByteStatCode.KILLS: user.stats.kills,
-                        AccelByteStatCode.ASSISTS: user.stats.assists,
-                        AccelByteStatCode.DEATHS: user.stats.deaths,
-                        AccelByteStatCode.GAMEMODE_CTO_RECOVERS: user.point,
-                    }
-
-                    for stat_code, value in stats.items():
-                        rows.append((user.user_id, stat_code, value, page_scraped_at))
-                await self._database.executemany(
-                    "insert or replace into stats (user_id, code, value, updated_at) values (?, ?, ?, ?)",
-                    rows,
-                )
-                await self._database.commit()
-
-            page_id += 1
-
-    async def _scrape_accelbyte_stats(self) -> None:
-        page_id = 0
-        while True:
-            try:
-                page = await self._accel_byte_client.get_leaderboard_page(
-                    AccelByteStatCode.SCORE, page_id=page_id
-                )
-            except NoContentPageBug:
-                _logger.error("no content page bug on accelbyte!")
-                page_id += 1
-                continue
-            except:
-                _logger.exception("failed to fetch page")
-                continue
-            _logger.debug("scraped %s users (page %s)", len(page), page_id)
-
-            if len(page) == 0:
-                page_id = 0
-                _logger.debug("scanned through all pages, starting over again")
-                continue
-
-            for leaderboard_stat in page:
-                try:
-                    user_info = await self._retry_get_player_info(
-                        leaderboard_stat.user_id
-                    )
-                except ExternalServiceError:
-                    _logger.warn(
-                        "failed to fetch the info of user %s",
-                        leaderboard_stat.user_id,
-                        exc_info=True,
-                    )
-                    continue
-                if user_info is None:
-                    _logger.warning("user info is can't be fetched even though it is on the leaderboard for user id: %s", leaderboard_stat.user_id)
-                    continue
-                try:
-                    user_stats = await self._accel_byte_client.get_user_stats(
-                        leaderboard_stat.user_id
-                    )
-                except ExternalServiceError:
-                    _logger.warn(
-                        "failed to fetch the stats of user %s",
-                        leaderboard_stat.user_id,
-                        exc_info=True,
-                    )
-                    continue
-                assert (
-                    user_stats is not None
-                ), "user stats missing even though it was on the leaderboard"
-                scraped_at = time.time()
-
-                await self._quest_db.ingest_user_stats(
-                    leaderboard_stat.user_id, user_stats
-                )
-
-                async with self._database_lock.shared():
-                    await self._database.execute(
-                        "insert or replace into users (id, name) values (?, ?)",
-                        [leaderboard_stat.user_id, user_info.display_name],
-                    )
-                    await self._database.executemany(
-                        "insert or replace into stats (code, user_id, value, updated_at) values (?, ?, ?, ?)",
-                        [
-                            (stat_code, leaderboard_stat.user_id, value, scraped_at)
-                            for stat_code, value in user_stats.items()
-                        ],
-                    )
-
-                    # Removed stat codes
-                    result = await self._database.execute(
-                        "select code from stats where user_id = ?",
-                        [leaderboard_stat.user_id],
-                    )
-                    removed_stat_codes = []
-                    for row in await result.fetchall():
-                        stat_code = row[0]
-                        if stat_code not in user_stats.keys():
-                            removed_stat_codes.append(stat_code)
-
-                    await self._database.executemany(
-                        "delete from stats where user_id = ? and code = ?",
-                        [
-                            (leaderboard_stat.user_id, removed_stat_code)
-                            for removed_stat_code in removed_stat_codes
-                        ],
-                    )
-
-                    await self._database.commit()
-
-            page_id += 1
 
     async def _retry_get_player_info(self, user_id: str) -> AccelBytePlayerInfo | None:
         for i in range(3):

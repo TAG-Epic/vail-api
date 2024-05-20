@@ -17,7 +17,6 @@ class ScraperUserConfig(BaseModel):
 
 
 class BansConfig(BaseModel):
-    aexlab: bool = False
     accelbyte: bool = False
 
 

@@ -5,7 +5,6 @@ import aiosqlite
 from aiohttp import web
 
 from .client.accelbyte import AccelByteClient
-from .client.aexlab import AexLabClient
 from .client.epic_games import EpicGamesClient
 from .database.quest import QuestDBWrapper
 from .utils.exclusive_lock import ExclusiveLock
@@ -41,14 +40,12 @@ async def main() -> None:
     app[app_keys.DATABASE] = database
     app[app_keys.QUEST_DB] = QuestDBWrapper(config.database.quest_url)
     app[app_keys.ACCEL_BYTE_CLIENT] = AccelByteClient(config)
-    app[app_keys.AEXLAB_CLIENT] = AexLabClient(config)
     app[app_keys.EPIC_GAMES_CLIENT] = EpicGamesClient(config)
     app[app_keys.SCRAPER] = VailScraper(
         database,
         database_lock,
         app[app_keys.QUEST_DB],
         app[app_keys.ACCEL_BYTE_CLIENT],
-        app[app_keys.AEXLAB_CLIENT],
         app[app_keys.EPIC_GAMES_CLIENT],
         config,
     )

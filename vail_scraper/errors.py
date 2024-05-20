@@ -25,7 +25,6 @@ class AccelByteErrorCode(IntEnum):
 
 
 class Service(StrEnum):
-    AEXLAB = "aexlab"
     ACCELBYTE = "accelbyte"
     UNKNOWN = "unknown"
 
@@ -37,8 +36,6 @@ class Service(StrEnum):
             return Service.UNKNOWN
         host_to_service: dict[str, Service] = {
             "login.vailvr.com": Service.ACCELBYTE,
-            "aexlab.com": Service.AEXLAB,
-            "ivrl.aexlab.com": Service.AEXLAB,
         }
         return host_to_service.get(parsed_url.host, Service.UNKNOWN)
 
