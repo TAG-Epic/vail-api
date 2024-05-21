@@ -93,7 +93,7 @@ class VailScraper:
                 _logger.debug("finished checking @ page %s", page_id)
 
                 # Find users not spotted (aka moved up ranking while we checked)
-                result = await self._database.execute("select user_id from users")
+                result = await self._database.execute("select id from users")
                 rows = await result.fetchall()
 
                 for row in rows:
