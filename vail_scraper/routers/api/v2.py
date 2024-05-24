@@ -520,6 +520,12 @@ async def get_stats_for_user_v2(request: web.Request) -> web.StreamResponse:
                     "kills": int(user_stats.get(AccelByteStatCode.KILLS, 0)),
                     "assists": int(user_stats.get(AccelByteStatCode.ASSISTS, 0)),
                     "deaths": int(user_stats.get(AccelByteStatCode.DEATHS, 0)),
+
+                    "bursts": {
+                        "2": int(user_stats.get(AccelByteStatCode.KILLSTREAKS_DOUBLE, 0)),
+                        "3": int(user_stats.get(AccelByteStatCode.KILLSTREAKS_TRIPLE, 0)),
+                        "5": int(user_stats.get(AccelByteStatCode.KILLSTREAKS_SPREE, 0))
+                    }
                 },
                 "match_results": {
                     "wins": int(user_stats.get(AccelByteStatCode.GAMES_WON, 0)),
@@ -529,6 +535,7 @@ async def get_stats_for_user_v2(request: web.Request) -> web.StreamResponse:
                         user_stats.get(AccelByteStatCode.GAMES_ABANDONED, 0)
                     ),
                 },
+                "prestige": int(user_stats.get(AccelByteStatCode.PRESTIGE, 0))
             },
         }
     )
