@@ -1,5 +1,6 @@
 import asyncio
 from logging import getLogger
+import typing
 import aiosqlite
 import time
 from aiohttp import ClientSession
@@ -91,17 +92,21 @@ class VailScraper:
 
             if len(leaderboard_page) == 0:
                 _logger.debug("finished checking @ page %s", page_id)
+                started_post_scrape = time.time()
 
                 # Find users not spotted (aka moved up ranking while we checked)
                 result = await self._database.execute("select id from users")
-                rows = await result.fetchall()
 
-                for row in rows:
+                async for row in self._chunk_aiosqlite_response(result):
                     user_id = row[0]
 
                     if user_id not in spotted_user_ids:
                         _logger.debug("didn't spot %s during leaderboard scrape, checking just to make sure!", user_id)
                         self._user_ids_pending_scrape.add(user_id)
+
+                    # Since we are going over quite a lot of rows, we chunk it and do frequent asyncio context switches to lighten the load
+                    await asyncio.sleep(0)
+
 
                 if len(total_outdated_user_ids) == 0:
                     _logger.debug("no updates, sleeping for 10s")
@@ -109,6 +114,10 @@ class VailScraper:
                 page_id = 0
                 spotted_user_ids.clear()
                 total_outdated_user_ids.clear()
+                
+                finished_post_scrape = time.time()
+                _logger.debug("used %s seconds to do post-scrape", finished_post_scrape - started_post_scrape)
+
                 continue
 
             user_id_to_score: dict[str, int] = {user.user_id:user.point for user in leaderboard_page}
@@ -133,6 +142,19 @@ class VailScraper:
                 self._user_ids_pending_scrape.add(user_id)
 
             page_id += 1
+
+    async def _chunk_aiosqlite_response(self, cursor: aiosqlite.Cursor, chunk_size: int = 1000) -> typing.AsyncGenerator[aiosqlite.Row, None]:
+        rows: list[aiosqlite.Row] = []
+
+        while True:
+            if len(rows) == 0:
+                await asyncio.sleep(0) # Allow context switch
+                rows = list(await cursor.fetchmany(chunk_size))
+            row = rows.pop(0)
+            if row is None:
+                break
+            yield row
+
     async def _fast_scrape_accelbyte_updater(self) -> None:
         while True:
             user_id = await self._user_ids_pending_scrape.get_item()
