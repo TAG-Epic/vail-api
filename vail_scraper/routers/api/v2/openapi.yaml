@@ -18,11 +18,14 @@ servers:
 tags:
   - name: "users"
     description: "Information about users"
+  - name: "game"
+    description: "Game wide endpoints"
     
 paths:
   /users/search:
     get:
       operationId: "searchForUser"
+      summary: "Search for a VAIL user"
       description: |
         # Info
         Search for a user
@@ -30,7 +33,7 @@ paths:
         # Notice
         The current implementation returns the first 50 records which contain the `name` in the order they are in the database.
         This means that some names like "Pan" or "Tea" is impossible to search for right now.
-        This endpoint uses a local db, so a user that *just* started vail might not show up immidietly.
+        This endpoint uses a local db, so a user that *just* started VAIL might not show up immidietly.
         
         # Rate limits
         This endpoint is currently not rate limited.
@@ -60,12 +63,13 @@ paths:
   /users/{user_id}:
     get:
       operationId: "getUserInfo"
+      summary: "Get user info by id"
       description: |
           # Info
           Get user info by id
           
           # Notice
-          This endpoint uses a local db, so a user that *just* started vail might not show up immidietly.
+          This endpoint uses a local db, so a user that *just* started VAIL might not show up immidietly.
 
           # Rate limits
           This endpoint is currently not rate limited.
@@ -90,6 +94,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserNotFoundError"
+  /game/user-count:
+    get:
+      operationId: "getGameUserCount"
+      summary: "Get how many VAIL users exists"
+      description: |
+        # Info
+        Get how many people have a account on vail
+        
+        # Notice
+        This only counts people who have started vail once.
+        Users who use family sharing will get one account counted per "account" in the family share
+        Users who create "full" accounts through https://login.vailvr.com will only count once despite being on steam and oculus.
+        
+        # Rate limits
+        This endpoint is currently not rate limited.
+      tags: ["game"]
+      
+      responses:
+        "200":
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                required:
+                  - "count"
+                properties:
+                  count:
+                    type: "integer"
+                    description: "How many VAIL users exists"
 components:
   responses:
     RateLimited:
