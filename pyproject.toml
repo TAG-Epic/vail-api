@@ -14,6 +14,7 @@ toml = "^0.10.2"
 slowstack = "^1.0.0"
 black = "^24.4.2"
 nextcore = "^2.0.2"
+pyyaml = "^6.0.1"
 
 
 [build-system]

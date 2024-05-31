@@ -1,0 +1,149 @@
+openapi: "3.1.0"
+info:
+  title: "Vail scraper API"
+  version: "2"
+  summary: "Automatically scrapes vail's API and returns it in a usable format"
+  description: |
+    Rate limits are per-ip, however overrides may be added if you ask.
+  license:
+    name: "GPL v3"
+    identifier: "GPL-3.0"
+  contact:
+    name: "Discord"
+    url: "https://discord.com/users/397745647723216898"
+
+servers:
+  - description: "Production"
+    url: "https://vail-scraper.farfrom.world/api/v2"
+tags:
+  - name: "users"
+    description: "Information about users"
+    
+paths:
+  /users/search:
+    get:
+      operationId: "searchForUser"
+      description: |
+        # Info
+        Search for a user
+        
+        # Notice
+        The current implementation returns the first 50 records which contain the `name` in the order they are in the database.
+        This means that some names like "Pan" or "Tea" is impossible to search for right now.
+        This endpoint uses a local db, so a user that *just* started vail might not show up immidietly.
+        
+        # Rate limits
+        This endpoint is currently not rate limited.
+      tags: ["users"]
+      
+      parameters:
+        - name: "name"
+          description: "the username to search for. Note that this searches for the *username* not *display name*"
+          in: "query"
+          required: true
+          schema:
+            $ref: "#/components/schemas/UserName"
+      responses:
+        "200":
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                type: "object"
+                required:
+                  - "items"
+                properties:
+                  items:
+                    type: "array"
+                    items:
+                      $ref: "#/components/schemas/UserInfo"
+  /users/{user_id}:
+    get:
+      operationId: "getUserInfo"
+      description: |
+          # Info
+          Get user info by id
+          
+          # Notice
+          This endpoint uses a local db, so a user that *just* started vail might not show up immidietly.
+
+          # Rate limits
+          This endpoint is currently not rate limited.
+      tags: ["users"]
+
+      parameters:
+        - name: "user_id"
+          in: "path"
+          required: true
+          schema:
+            $ref: "#/components/schemas/UserId"
+      responses:
+        "200":
+          description: "User found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserInfo"
+        "404":
+          description: "User not found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserNotFoundError"
+components:
+  responses:
+    RateLimited:
+      description: |
+        You have been rate limited.
+        
+        If there is a legitimite reason you are consistently hitting this, please contact me and I will potentially grant an override.
+      content:
+        application/json:
+          schema:
+            type: "object"
+            required:
+              - "code"
+              - "detail"  
+            properties:
+              code:
+                type: "string"
+                enum:
+                  - "rate_limited"
+              detail:
+                type: "string"
+                example: "rate limited"
+
+  schemas:
+    UserName:
+      type: "string"
+      example: "FarrisVR"
+    UserId:
+      type: "string"
+      format: "uuid-no-dashes"
+      example: "086c0bdf4c8247eda847f876b49c057a"
+    UserInfo:
+      type: "object"
+      required:
+        - "name"
+        - "id"
+        
+      properties:
+        id:
+          $ref: "#/components/schemas/UserId"
+        name:
+          $ref: "#/components/schemas/UserName"
+    
+    # Errors
+    UserNotFoundError:
+      type: "object"
+      required:
+        - "code"
+        - "detail"
+      properties:
+        code:
+          type: "string"
+          enum:
+            - "user_not_found"
+        detail:
+          type: "string"
+          example: "user not found/not scraped yet"
