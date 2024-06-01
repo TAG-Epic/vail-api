@@ -1,6 +1,5 @@
 import json
 import base64
-from logging import getLogger
 import time
 import typing
 
@@ -11,8 +10,6 @@ from ..config import ScraperConfig
 from ..utils.circuit_breaker import CircuitBreaker
 from ..errors import ExternalServiceError, Service
 
-_logger = getLogger(__name__)
-
 TOKEN_MARGIN_SECONDS: float = 2
 
 
@@ -22,7 +19,6 @@ def get_token_expiry_in_seconds(token: str) -> float:
     body_data = json.loads(base64.b64decode(body + "=="))
 
     expire_time = body_data["exp"] - time.time()
-    _logger.debug("token expires in %s", expire_time)
     return expire_time
 
 
