@@ -13,7 +13,9 @@ services:
     volumes:
       - vail_scraper:/opt/data
   questdb:
-    image: questdb/questdb:7.4.2
+    build:
+      context: .
+      dockerfile: questdb.Dockerfile
     ports:
       - 10003:9000 # Web and API
     volumes:
