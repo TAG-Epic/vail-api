@@ -93,7 +93,45 @@ paths:
           content:
             application/json:
               schema:
+                $ref: "#/components/schemas/UserNotFoundOrScrapedError"
+  /users/{user_id}/stats:
+    get:
+      operationId: "getUserStats"
+      summary: "Get user stats"
+      description: |
+          # Info
+          Get someone's quick play stats
+          
+          # Notice
+          This doesn't count customs.
+
+          # Rate limits
+          This endpoint has a limit of 5 requests per 5 seconds.
+      tags: ["users"]
+      
+      parameters:
+        - name: "user_id"
+          in: "path"
+          required: true
+          schema:
+            $ref: "#/components/schemas/UserId"
+      
+      responses:
+        "200":
+          description: "Success"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserStats"
+        "404":
+          description: "User not found"
+          content:
+            application/json:
+              schema:
                 $ref: "#/components/schemas/UserNotFoundError"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        
   /game/user-count:
     get:
       operationId: "getGameUserCount"
@@ -167,8 +205,656 @@ components:
         name:
           $ref: "#/components/schemas/UserName"
     
+    # User stats
+    UserStats:
+      type: "object"
+      required:
+        - "maps"
+        - "weapons"
+        - "gamemodes"
+        - "general"
+        
+      properties:
+        maps:
+          $ref: "#/components/schemas/UserMapsStats"
+        weapons:
+          $ref: "#/components/schemas/UserWeaponsStats"
+        gamemodes:
+          $ref: "#/components/schemas/UserGamemodeStats"
+        general:
+          $ref: "#/components/schemas/UserGeneralStats"
+    UserMapsStats:
+      type: "object"
+      required:
+        - "nine"
+        - "thevoid"
+        - "miru"
+        - "suna"
+        - "atmos"
+        - "volt"
+        - "cliffside"
+        - "khidi"
+        - "este"
+        - "maar"
+        
+      properties:
+        nine:
+          $ref: "#/components/schemas/UserMapStats"
+        thevoid:
+          $ref: "#/components/schemas/UserMapStats"
+        miru:
+          $ref: "#/components/schemas/UserMapStats"
+        suna:
+          $ref: "#/components/schemas/UserMapStats"
+        atmos:
+          $ref: "#/components/schemas/UserMapStats"
+        volt:
+          $ref: "#/components/schemas/UserMapStats"
+        cliffside:
+          $ref: "#/components/schemas/UserMapStats"
+        khidi:
+          $ref: "#/components/schemas/UserMapStats"
+        este:
+          $ref: "#/components/schemas/UserMapStats"
+        maar:
+          $ref: "#/components/schemas/UserMapStats"
+    UserMapStats:
+      type: "object"
+      required:
+        - "match_results"
+      properties:
+        match_results:
+          $ref: "#/components/schemas/UserStatsMapMatchResults"
+    UserStatsMapMatchResults:
+      type: "object"
+      required:
+        - "wins"
+        - "losses"
+        - "draws"
+        - "abandons"
+      properties:
+        wins:
+          type: "number"
+        losses:
+          type: "number"
+        draws:
+          type: "number"
+        abandons:
+          type: "number"
+          
+    UserWeaponsStats:
+      type: "object"
+      required:
+        - "kanto"
+        - "scarh"
+        - "pl14"
+        - "pm9"
+        - "ump45"
+        - "mk23"
+        - "vityaz"
+        - "g17"
+        - "grotb"
+        - "vector45"
+        - "deagle"
+        - "apc9pro"
+        - "ak12"
+        - "g28z"
+        - "mr96"
+        - "stf12"
+        - "mk418"
+        - "ak303n"
+        - "m2rifled"
+      properties:
+        kanto:
+          $ref: "#/components/schemas/UserStatsWeaponKanto"
+        scarh:
+          $ref: "#/components/schemas/UserStatsWeaponGunGeneric"
+        pl14:
+          $ref: "#/components/schemas/UserStatsWeaponGunGeneric"
+        pm9:
+          $ref: "#/components/schemas/UserStatsWeaponGunGeneric"
+        ump45:
+          $ref: "#/components/schemas/UserStatsWeaponGunGeneric"
+        mk23:
+          $ref: "#/components/schemas/UserStatsWeaponGunGeneric"
+        vityaz:
+          $ref: "#/components/schemas/UserStatsWeaponGunGeneric"
+        g17:
+          $ref: "#/components/schemas/UserStatsWeaponGunGeneric"
+        grotb:
+          $ref: "#/components/schemas/UserStatsWeaponGunGeneric"
+        vector45:
+          $ref: "#/components/schemas/UserStatsWeaponGunGeneric"
+        deagle:
+          $ref: "#/components/schemas/UserStatsWeaponGunGeneric"
+        apc9pro:
+          $ref: "#/components/schemas/UserStatsWeaponGunGeneric"
+        ak12:
+          $ref: "#/components/schemas/UserStatsWeaponGunGeneric"
+        g28z:
+          $ref: "#/components/schemas/UserStatsWeaponGunGeneric"
+        mr96:
+          $ref: "#/components/schemas/UserStatsWeaponGunGeneric"
+        stf12:
+          $ref: "#/components/schemas/UserStatsWeaponGunGeneric"
+        mk418:
+          $ref: "#/components/schemas/UserStatsWeaponGunGeneric"
+        ak303n:
+          $ref: "#/components/schemas/UserStatsWeaponGunGeneric"
+        m2rifled:
+          $ref: "#/components/schemas/UserStatsWeaponGunGeneric"
+        
+    UserStatsWeaponGunGeneric:
+      type: "object"
+      required:
+        - "kills"
+        - "shots"
+      properties:
+        kills:
+          type: "object"
+          required:
+            - "total"
+            - "headshot_kills"
+          properties:
+            total:
+              type: "number"
+            headshot_kills:
+              type: "number"
+        shots:
+          type: "object"
+          required:
+            - "fired"
+            - "hits"
+          properties:
+            fired:
+              type: "number"
+            hits:
+              type: "object"
+              required:
+                - "head"
+                - "body"
+                - "arm"
+                - "leg"
+              properties:
+                head:
+                  type: "number"
+                body:
+                  type: "number"
+                arm:
+                  type: "number"
+                leg:
+                  type: "number"
+    UserStatsWeaponKanto:
+      type: "object"
+      required:
+        - "kills"
+      properties:
+        kills:
+          type: "object"
+          required:
+            - "total"
+            - "headshot_kills"
+          properties:
+            total:
+              type: "number"
+            headshot_kills:
+              type: "number"
+              
+    UserGamemodeStats:
+      type: "object"
+      required:
+        - "artifact"
+        - "capture_the_orb"
+        - "team_deathmatch"
+        - "scoutzknivez"
+        - "hardpoint"
+        - "free_for_all"
+        - "gun_game"
+        - "one_in_the_chamber"
+      properties:
+        artifact:
+          $ref: "#/components/schemas/UserGamemodeArtifactStats"
+        capture_the_orb:
+          $ref: "#/components/schemas/UserGamemodeCaptureTheOrbStats"
+        team_deathmatch:
+          $ref: "#/components/schemas/UserGamemodeTeamDeathmatchStats"
+        scoutzknivez:
+          $ref: "#/components/schemas/UserGamemodeScoutzknivezStats"
+        hardpoint:
+          $ref: "#/components/schemas/UserGamemodeHardpointStats"
+        free_for_all:
+          $ref: "#/components/schemas/UserGamemodeFreeForAllStats"
+        gun_game:
+          $ref: "#/components/schemas/UserGamemodeGunGameStats"
+        one_in_the_chamber:
+          $ref: "#/components/schemas/UserGamemodeOneInTheChamberStats"
+    UserGamemodeArtifactStats:
+      type: "object"
+      required:
+        - "time_played_seconds"
+        - "kills_and_deaths"
+        - "scanner"
+        - "match_results"
+        - "round_results"
+      properties:
+        time_played_seconds:
+          type: "number"
+        kills_and_deaths:
+          type: "object"
+          required:
+            - "kills"
+            - "aces"
+            - "assists"
+            - "deaths"
+          properties:
+            kills:
+              type: "number"
+            aces:
+              type: "number"
+            assists:
+              type: "number"
+            deaths:
+              type: "number"
+        scanner:
+          type: "object"
+          required:
+            - "planted"
+            - "disabled"
+          properties:
+            planted:
+              type: "number"
+            disabled:
+              type: "number"
+        match_results:
+          type: "object"
+          required:
+            - "wins"
+            - "losses"
+            - "abandons"
+          properties:
+            wins:
+              type: "number"
+            losses:
+              type: "number"
+            abandons:
+              type: "number"
+        round_results:
+          type: "object"
+          required:
+            - "pistol_round"
+            - "reyab"
+          properties:
+            pistol_round:
+              type: "object"
+              properties:
+                wins:
+                  type: "number"
+                losses:
+                  type: "number"
+            reyab:
+              type: "object"
+              properties:
+                wins:
+                  type: "number"
+                losses:
+                  type: "number"
+    UserGamemodeCaptureTheOrbStats:
+      type: "object"
+      required:
+        - "time_played_seconds"
+        - "kills_and_deaths"
+        - "match_results"
+      properties:
+        time_played_seconds:
+          type: "number"
+        kills_and_deaths:
+          type: "object"
+          required:
+            - "kills"
+            - "kills_on_orb_carrier"
+            - "kills_as_orb_carrier"
+            - "assists"
+            - "deaths"
+          properties:
+            kills:
+              type: "number"
+            kills_on_orb_carrier:
+              type: "number"
+            kills_as_orb_carrier:
+              type: "number"
+            assists:
+              type: "number"
+            deaths:
+              type: "number"
+        orb:
+          type: "object"
+          required:
+            - "steals"
+            - "recovers"
+            - "captures"
+          properties:
+            steals:
+              type: "number"
+            recovers:
+              type: "number"
+            captures:
+              type: "number"
+        match_results:
+          type: "object"
+          required:
+            - "wins"
+            - "draws"
+            - "losses"
+            - "abandons"
+          properties:
+            wins:
+              type: "number"
+            draws:
+              type: "number"
+            losses:
+              type: "number"
+            abandons:
+              type: "number"
+    UserGamemodeTeamDeathmatchStats:
+      type: "object"
+      required:
+        - "time_played_seconds"
+        - "kills_and_deaths"
+        - "match_results"
+      properties:
+        time_played_seconds:
+          type: "number"
+        kills_and_deaths:
+          type: "object"
+          required:
+            - "kills"
+            - "assists"
+            - "deaths"
+          properties:
+            kills:
+              type: "number"
+            assists:
+              type: "number"
+            deaths:
+              type: "number"
+        match_results:
+          type: "object"
+          required:
+            - "wins"
+            - "draws"
+            - "losses"
+            - "abandons"
+          properties:
+            wins:
+              type: "number"
+            draws:
+              type: "number"
+            losses:
+              type: "number"
+            abandons:
+              type: "number"
+              
+    UserGamemodeScoutzknivezStats:
+      type: "object"
+      required:
+        - "time_played_seconds"
+        - "kills_and_deaths"
+        - "match_results"
+      properties:
+        time_played_seconds:
+          type: "number"
+        kills_and_deaths:
+          type: "object"
+          required:
+            - "kills"
+            - "assists"
+            - "deaths"
+          properties:
+            kills:
+              type: "number"
+            assists:
+              type: "number"
+            deaths:
+              type: "number"
+        match_results:
+          type: "object"
+          required:
+            - "wins"
+            - "draws"
+            - "losses"
+            - "abandons"
+          properties:
+            wins:
+              type: "number"
+            draws:
+              type: "number"
+            losses:
+              type: "number"
+            abandons:
+              type: "number"
+    UserGamemodeHardpointStats:
+      type: "object"
+      required:
+        - "time_played_seconds"
+        - "kills_and_deaths"
+        - "match_results"
+      properties:
+        time_played_seconds:
+          type: "number"
+        kills_and_deaths:
+          type: "object"
+          required:
+            - "kills"
+            - "assists"
+            - "deaths"
+          properties:
+            kills:
+              type: "number"
+            assists:
+              type: "number"
+            deaths:
+              type: "number"
+        point:  
+          type: "object"
+          required:
+            - "first_captures"
+          properties:
+            first_captures:
+              type: "number"
+        match_results:
+          type: "object"
+          required:
+            - "wins"
+            - "draws"
+            - "losses"
+            - "abandons"
+          properties:
+            wins:
+              type: "number"
+            draws:
+              type: "number"
+            losses:
+              type: "number"
+            abandons:
+              type: "number"
+    UserGamemodeFreeForAllStats:
+      type: "object"
+      required:
+        - "time_played_seconds"
+        - "kills_and_deaths"
+        - "match_results"
+      properties:
+        time_played_seconds:
+          type: "number"
+        kills_and_deaths:
+          type: "object"
+          required:
+            - "kills"
+            - "assists"
+            - "deaths"
+          properties:
+            kills:
+              type: "number"
+            assists:
+              type: "number"
+            deaths:
+              type: "number"
+        match_results:
+          type: "object"
+          required:
+            - "wins"
+            - "losses"
+            - "abandons"
+          properties:
+            wins:
+              type: "number"
+            losses:
+              type: "number"
+            abandons:
+              type: "number"
+    UserGamemodeGunGameStats:
+      type: "object"
+      required:
+        - "time_played_seconds"
+        - "kills_and_deaths"
+        - "match_results"
+      properties:
+        time_played_seconds:
+          type: "number"
+        kills_and_deaths:
+          type: "object"
+          required:
+            - "kills"
+            - "assists"
+            - "deaths"
+          properties:
+            kills:
+              type: "number"
+            assists:
+              type: "number"
+            deaths:
+              type: "number"
+        match_results:
+          type: "object"
+          required:
+            - "wins"
+            - "losses"
+            - "abandons"
+          properties:
+            wins:
+              type: "number"
+            losses:
+              type: "number"
+            abandons:
+              type: "number"
+    UserGamemodeOneInTheChamberStats:
+      type: "object"
+      required:
+        - "time_played_seconds"
+        - "kills_and_deaths"
+        - "match_results"
+      properties:
+        time_played_seconds:
+          type: "number"
+        kills_and_deaths:
+          type: "object"
+          required:
+            - "kills"
+            - "assists"
+            - "deaths"
+          properties:
+            kills:
+              type: "number"
+            assists:
+              type: "number"
+            deaths:
+              type: "number"
+        match_results:
+          type: "object"
+          required:
+            - "wins"
+            - "draws"
+            - "losses"
+            - "abandons"
+          properties:
+            wins:
+              type: "number"
+            draws:
+              type: "number"
+            losses:
+              type: "number"
+            abandons:
+              type: "number"
+    UserGeneralStats:
+      type: "object"
+      properties:
+        time_played_seconds:
+          type: "number"
+        kills_and_deaths:
+          type: "object"
+          required:
+            - "kills"
+            - "assists"
+            - "deaths"
+            - "bursts"
+          properties:
+            kills:
+              type: "number"
+            assists:
+              type: "number"
+            deaths:
+              type: "number"
+            bursts:
+              type: "object"
+              required:
+                - "2"
+                - "3"
+                - "5"
+              properties:
+                "2":
+                  type: "number"
+                "3":
+                  type: "number"
+                "5":
+                  type: "number"
+        match_results:
+           type: "object"
+           required:
+             - "wins"
+             - "draws"
+             - "losses"
+             - "abandons"
+           properties:
+             wins:
+               type: "number"
+             draws:
+               type: "number"
+             losses:
+               type: "number"
+             abandons:
+               type: "number"
+        prestige:
+          type: "number"
+
+              
+            
+          
+    
     # Errors
     UserNotFoundError:
+      type: "object"
+      required:
+        - "code"
+        - "detail"
+      properties:
+        code:
+          type: "string"
+          enum:
+            - "user_not_found"
+        detail:
+          type: "string"
+          example: "user not found"
+    UserNotFoundOrScrapedError:
       type: "object"
       required:
         - "code"
