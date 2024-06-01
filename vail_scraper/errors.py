@@ -15,7 +15,6 @@ class NoContentPageBug(Exception):
 
 class APIErrorCode(StrEnum):
     USER_NOT_FOUND = "user_not_found"
-    MISSING_QUERY_PARAMETER = "missing_query_parameter"
     RATE_LIMITED = "rate_limited"
     QUERY_PARAMETER_INVALID = "query_parameter_invalid"
 

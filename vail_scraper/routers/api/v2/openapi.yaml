@@ -215,6 +215,15 @@ paths:
                      type: "array"
                      items:
                        $ref: "#/components/schemas/UserCountTimeseriesEntry"
+        "400":
+           description: "You did something stupid"
+           content:
+             application/json:
+               schema:
+                 oneOf:
+                   - $ref: "#/components/schemas/QueryParamInvalidError"
+                   
+             
 components:
   responses:
     RateLimited:
@@ -939,3 +948,19 @@ components:
         detail:
           type: "string"
           example: "user not found/not scraped yet"
+    QueryParamInvalidError:
+      type: "object"
+      required:
+        - "code"
+        - "detail"
+        - "field"
+      properties:
+        code:
+          type: "string"
+          enum:
+            - "query_parameter_invalid"
+        detail:
+          type: "string"
+          example: "failed to parse the after parameter"
+        field:
+          type: "string"
