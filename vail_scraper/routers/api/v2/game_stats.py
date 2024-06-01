@@ -59,7 +59,5 @@ async def get_user_count_time_series(request: web.Request) -> web.StreamResponse
     for row in rows:
         items.append({"timestamp": str(row[0].timestamp()), "count": row[1]})
 
-    print(items)
-
     return web.json_response({"items": items})
     

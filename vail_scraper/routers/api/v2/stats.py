@@ -1,8 +1,9 @@
 from logging import getLogger
 import time
 from typing import Any
-from aiohttp import web
+from datetime import datetime
 
+from aiohttp import web
 from slowstack.asynchronous.times_per import TimesPerRateLimiter
 
 from ....models.accelbyte import AccelByteStatCode
@@ -436,7 +437,7 @@ def format_user_stats(user_stats: dict[str, float]):
 @router.get("/api/v2/users/{user_id}/stats")
 @api_cors
 @rate_limit_http(lambda: TimesPerRateLimiter(5, 5))
-async def get_stats_for_user_v2(request: web.Request) -> web.StreamResponse:
+async def get_stats_for_user(request: web.Request) -> web.StreamResponse:
     vail_client = request.app[app_keys.ACCEL_BYTE_CLIENT]
     database = request.app[app_keys.DATABASE]
     database_lock = request.app[app_keys.DATABASE_LOCK]
@@ -481,3 +482,64 @@ async def get_stats_for_user_v2(request: web.Request) -> web.StreamResponse:
 
     # Generate stats
     return web.json_response(format_user_stats(user_stats))
+
+@router.get("/api/v2/users/{user_id}/stats/timeseries")
+@api_cors
+async def get_timeseries_stats_for_user(request: web.Request) -> web.StreamResponse:
+    database = request.app[app_keys.DATABASE]
+    quest_db = request.app[app_keys.QUEST_DB_POSTGRES]
+
+    user_id = request.match_info["user_id"]
+
+    try:
+        before_timestamp = datetime.fromtimestamp(float(request.query.getone("before", "0")))
+    except ValueError as error:
+        return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": f"failed to parse the before parameter: {error}", "field": "before"}, status=400)
+    
+    try:
+        after_timestamp = datetime.fromtimestamp(float(request.query.getone("after")))
+    except KeyError:
+        after_timestamp = datetime.utcnow()
+    except ValueError as error:
+        return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": f"failed to parse the after parameter: {error}", "field": "after"}, status=400)
+
+    if before_timestamp > after_timestamp:
+        return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": "before was later than after. Did you swap them around?", "field": "before"}, status=400)
+    
+    try:
+        limit = int(request.query.getone("limit"))
+    except KeyError:
+        limit = 100
+    except ValueError as error:
+        return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": f"failed to parse the limit parameter: {error}", "field": "limit"}, status=400)
+
+    if limit <= 0:
+        return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": "the limit parameter must be more than 0", "field": "limit"}, status=400)
+    if limit > 100:
+        return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": "the limit parameter must not be more than 100", "field": "limit"}, status=400)
+    
+    # Check if user exists
+    result = await database.execute("select count(*) from users where id = ?", [user_id])
+    row = await result.fetchone()
+    assert row is not None
+    if row[0] == 0:
+        return web.json_response({"code": APIErrorCode.USER_NOT_FOUND, "detail": "user not found/not scraped yet."})
+
+    # Get scrape times
+    rows = await quest_db.fetch("select timestamp from user_stats where user_id = $1 and code='game-seconds' and timestamp between $2 and $3 order by timestamp desc limit $4", user_id, after_timestamp, before_timestamp, limit)
+
+    items = []
+    for row in rows:
+        timestamp = row[0]
+        
+        stats = {}
+        rows = await quest_db.fetch("select code, value from user_stats where user_id = $1 and timestamp = $2", user_id, timestamp)
+
+        for row in rows:
+            stats[row[0]] = row[1]
+        
+        formatted = format_user_stats(stats)
+        formatted["timestamp"] = str(timestamp.timestamp())
+        items.append(formatted)
+
+    return web.json_response({"items": items})

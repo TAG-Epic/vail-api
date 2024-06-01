@@ -131,7 +131,65 @@ paths:
                 $ref: "#/components/schemas/UserNotFoundError"
         "429":
           $ref: "#/components/responses/RateLimited"
-        
+  /users/{user_id}/stats/timeseries:
+    get:
+      operationId: "getUserStatsTimeseries"
+      summary: "Get user historical stats"
+      description: |
+          # Info
+          Get someone's quick play stats from back in time
+          
+          # Notice
+          This doesn't count customs.
+
+          # Rate limits
+          This endpoint is currently not rate limited.
+      tags: ["users"]
+      
+      parameters:
+        - name: "user_id"
+          in: "path"
+          required: true
+          schema:
+            $ref: "#/components/schemas/UserId"
+        - name: "before"
+          in: "query"
+          schema:
+            $ref: "#/components/schemas/Timestamp"
+            description: "if not sent this will default to the current timestamp"
+        - name: "after"
+          in: "query"
+          schema:
+            $ref: "#/components/schemas/Timestamp"
+            default: 0
+        - name: "limit"
+          in: "query"
+          schema:
+            type: "number"
+            default: 100
+            minimum: 0
+            maximum: 100
+      
+      responses:
+        "200":
+          description: "Success"
+          content:
+            application/json:
+               schema:
+                 type: "object"
+                 required:
+                   - "items"
+                 properties:
+                   items:
+                     type: "array"
+                     items:
+                       $ref: "#/components/schemas/UserStatsTimeseriesEntry"
+        "404":
+          description: "User not found"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserNotFoundError"
   /game/user-count:
     get:
       operationId: "getGameUserCount"
@@ -293,6 +351,25 @@ components:
           $ref: "#/components/schemas/UserGamemodeStats"
         general:
           $ref: "#/components/schemas/UserGeneralStats"
+    UserStatsTimeseriesEntry:
+      type: "object"
+      required:
+        - "maps"
+        - "weapons"
+        - "gamemodes"
+        - "general"
+        
+      properties:
+        maps:
+          $ref: "#/components/schemas/UserMapsStats"
+        weapons:
+          $ref: "#/components/schemas/UserWeaponsStats"
+        gamemodes:
+          $ref: "#/components/schemas/UserGamemodeStats"
+        general:
+          $ref: "#/components/schemas/UserGeneralStats"
+        timestamp:
+          $ref: "#/components/schemas/StringTimestamp"
     UserMapsStats:
       type: "object"
       required:

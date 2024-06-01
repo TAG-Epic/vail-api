@@ -18,6 +18,7 @@ services:
       dockerfile: questdb.Dockerfile
     ports:
       - 10003:9000 # Web and API
+      - 10005:8812 # Postgres
     volumes:
       - questdb:/var/lib/questdb
     healthcheck:
