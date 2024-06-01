@@ -17,8 +17,11 @@ from .routers.raw import router as raw_router
 from .routers.api.v1 import router as api_v1_router
 from .routers.api.v2 import router as api_v2_router
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARNING)
 _logger = logging.getLogger(__name__)
+
+logging.getLogger("vail_scraper").setLevel(logging.DEBUG)
+logging.getLogger("aiohttp").setLevel(logging.DEBUG)
 
 app = web.Application()
 
