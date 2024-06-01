@@ -3,7 +3,7 @@ from logging import getLogger
 import typing
 import aiosqlite
 import time
-from aiohttp import ClientSession
+from aiohttp import ClientSession, web
 import traceback
 
 from slowstack.asynchronous.times_per import TimesPerRateLimiter
@@ -57,6 +57,8 @@ class VailScraper:
             tasks.append(asyncio.create_task(self._fast_scrape_accelbyte_updater()))
         try:
             await asyncio.gather(*tasks)
+        except web.GracefulExit:
+            pass
         except:
             error_details = traceback.format_exc()
 
