@@ -18,7 +18,7 @@ from .client.epic_games import EpicGamesClient
 from .utils.circuit_breaker import CircuitBreaker
 from .utils.exclusive_lock import ExclusiveLock
 from .config import ScraperConfig
-from .errors import ExternalServiceError, NoContentPageBug
+from .errors import ExternalServiceError
 
 _logger = getLogger(__name__)
 
@@ -114,6 +114,12 @@ class VailScraper:
                 page_id = 0
                 spotted_user_ids.clear()
                 total_outdated_user_ids.clear()
+
+                # Report user count
+                result = await self._database.execute("select count(*) from users")
+                row = await result.fetchone()
+                assert row is not None
+                await self._quest_db.ingest("user_count", [{"count": row[0]}])
                 
                 finished_post_scrape = time.time()
                 _logger.debug("used %s seconds to do post-scrape", finished_post_scrape - started_post_scrape)
