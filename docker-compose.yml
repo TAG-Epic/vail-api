@@ -7,7 +7,9 @@ services:
       dockerfile: Dockerfile
     ports:
       - 10002:8000
-
+    depends_on:
+      questdb:
+        condition: service_healthy
     volumes:
       - vail_scraper:/opt/data
   questdb:
@@ -16,6 +18,12 @@ services:
       - 10003:9000 # Web and API
     volumes:
       - questdb:/var/lib/questdb
+    healthcheck:
+      test: curl --fail http://localhost:9000 || exit 1
+      interval: 5s
+      retries: 5
+      start_period: 1s
+      timeout: 10s
 
 
 volumes:

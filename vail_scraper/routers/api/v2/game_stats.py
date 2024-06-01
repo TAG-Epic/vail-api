@@ -1,5 +1,4 @@
 from datetime import datetime
-import time
 from aiohttp import web
 
 from vail_scraper.errors import APIErrorCode
