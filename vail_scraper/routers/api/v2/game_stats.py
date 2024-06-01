@@ -36,6 +36,9 @@ async def get_user_count_time_series(request: web.Request) -> web.StreamResponse
         after_timestamp = datetime.utcnow()
     except ValueError as error:
         return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": f"failed to parse the after parameter: {error}", "field": "after"}, status=400)
+
+    if before_timestamp > after_timestamp:
+        return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": "before was later than after. Did you swap them around?", "field": "before"}, status=400)
     
     try:
         limit = int(request.query.getone("limit"))
