@@ -60,20 +60,24 @@ class VailScraper:
         except web.GracefulExit:
             pass
         except:
-            error_details = traceback.format_exc()
+            if self._config.alert_webhook is not None:
+                loop = asyncio.get_running_loop()
+                if loop.is_closed:
+                    raise
+                error_details = traceback.format_exc()
+                async with ClientSession() as session:
+                    response = await session.post("https://workbin.dev/api/new", json={
+                        "content": error_details,
+                        "language": "python"
+                    })
+                    data = await response.json()
+                    paste_url = f"https://workbin.dev/?id={data['key']}"
 
-            async with ClientSession() as session:
-                response = await session.post("https://workbin.dev/api/new", json={
-                    "content": error_details,
-                    "language": "python"
+                route = Route("POST", "/webhooks/{webhook_id}/{webhook_token}", webhook_id=self._config.alert_webhook.id, webhook_token=self._config.alert_webhook.token)
+                await self._discord_client.request(route, None, json={
+                    "content": f"<@{self._config.alert_webhook.target_user}> your code sucks: {paste_url}"
                 })
-                data = await response.json()
-                paste_url = f"https://workbin.dev/?id={data['key']}"
-
-            route = Route("POST", "/webhooks/{webhook_id}/{webhook_token}", webhook_id=self._config.alert_webhook.id, webhook_token=self._config.alert_webhook.token)
-            await self._discord_client.request(route, None, json={
-                "content": f"<@{self._config.alert_webhook.target_user}> your code sucks: {paste_url}"
-            })
+            raise
 
     async def _fast_scrape_accelbyte_discoverer(self) -> None:
         page_id = 0

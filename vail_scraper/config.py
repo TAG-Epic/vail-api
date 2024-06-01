@@ -39,7 +39,7 @@ class ScraperConfig(BaseModel):
     user: ScraperUserConfig
     rate_limiter: RateLimitConfig
     database: DatabaseConfig
-    alert_webhook: WebhookAlertConfig
+    alert_webhook: WebhookAlertConfig | None = None
 
 
 def load_config() -> ScraperConfig:
