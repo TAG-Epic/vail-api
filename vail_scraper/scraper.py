@@ -156,8 +156,9 @@ class VailScraper:
             if len(rows) == 0:
                 await asyncio.sleep(0) # Allow context switch
                 rows = list(await cursor.fetchmany(chunk_size))
-            row = rows.pop(0)
-            if row is None:
+            try:
+                row = rows.pop(0)
+            except IndexError:
                 break
             yield row
 
