@@ -27,12 +27,12 @@ async def get_user_count_time_series(request: web.Request) -> web.StreamResponse
     db = request.app[app_keys.QUEST_DB_POSTGRES]
     
     try:
-        before_timestamp = datetime.fromtimestamp(int(request.query.getone("before", "0")))
+        before_timestamp = datetime.fromtimestamp(float(request.query.getone("before", "0")))
     except ValueError as error:
         return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": f"failed to parse the before parameter: {error}", "field": "before"}, status=400)
     
     try:
-        after_timestamp = datetime.fromtimestamp(int(request.query.getone("after")))
+        after_timestamp = datetime.fromtimestamp(float(request.query.getone("after")))
     except KeyError:
         after_timestamp = datetime.utcnow()
     except ValueError as error:
