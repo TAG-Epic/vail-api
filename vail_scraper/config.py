@@ -23,6 +23,7 @@ class BansConfig(BaseModel):
 class DatabaseConfig(BaseModel):
     sqlite_url: str
     quest_url: str
+    quest_postgres_url: str
 
 class WebhookAlertConfig(BaseModel):
     id: int

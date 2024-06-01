@@ -4,6 +4,7 @@ from datetime import datetime
 from logging import getLogger
 from typing import Any
 from aiohttp import ClientSession, FormData
+from datetime import datetime
 
 _logger = getLogger(__name__)
 
@@ -19,10 +20,11 @@ class QuestDBWrapper:
         return self._session
 
     async def ingest(self, table_name: str, records: list[dict[str, Any]]) -> None:
-        timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
         _logger.info("ingesting %s records into %s", len(records), table_name)
         if len(records) == 0:
             return
+
+        timestamp = self.from_datetime_to_questtime(datetime.utcnow())
 
         for record in records:
             if "timestamp" not in record:
@@ -66,6 +68,13 @@ class QuestDBWrapper:
                 for stat_code, value in stats.items()
             ],
         )
+
+
+    def from_datetime_to_questtime(self, dt: datetime) -> str:
+        return dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+    def from_questtime_to_datetime(self, questtime: str) -> datetime:
+        return datetime.strptime(questtime, "%Y-%m-%dT%H:%M:%S.%fZ")
 
 
 class UploadError(Exception):

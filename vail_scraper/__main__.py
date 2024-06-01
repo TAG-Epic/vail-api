@@ -3,6 +3,7 @@ import logging
 
 import aiosqlite
 from aiohttp import web
+import asyncpg
 
 from .client.accelbyte import AccelByteClient
 from .client.epic_games import EpicGamesClient
@@ -39,6 +40,7 @@ async def main() -> None:
     app[app_keys.CONFIG] = config
     app[app_keys.DATABASE] = database
     app[app_keys.QUEST_DB] = QuestDBWrapper(config.database.quest_url)
+    app[app_keys.QUEST_DB_POSTGRES] = await asyncpg.create_pool(config.database.quest_postgres_url)
     app[app_keys.ACCEL_BYTE_CLIENT] = AccelByteClient(config)
     app[app_keys.EPIC_GAMES_CLIENT] = EpicGamesClient(config)
     app[app_keys.SCRAPER] = VailScraper(

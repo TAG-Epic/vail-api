@@ -1,5 +1,6 @@
 import aiosqlite
 from aiohttp.web import AppKey
+import asyncpg
 
 from .client.accelbyte import AccelByteClient
 from .client.epic_games import EpicGamesClient
@@ -19,3 +20,4 @@ EPIC_GAMES_CLIENT: AppKey[EpicGamesClient] = AppKey(
     "epic_games_client", EpicGamesClient
 )
 QUEST_DB: AppKey[QuestDBWrapper] = AppKey("quest_db", QuestDBWrapper)
+QUEST_DB_POSTGRES: AppKey[asyncpg.Pool] = AppKey("quest_db_postgres", asyncpg.Pool)
