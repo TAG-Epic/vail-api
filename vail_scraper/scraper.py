@@ -68,7 +68,7 @@ class VailScraper:
                 data = await response.json()
                 paste_url = f"https://workbin.dev/?id={data['key']}"
 
-            route = Route("POST", "/webhooks/{webhook_id}/{webhook_token}")
+            route = Route("POST", "/webhooks/{webhook_id}/{webhook_token}", webhook_id=self._config.alert_webhook.id, webhook_token=self._config.alert_webhook.token)
             await self._discord_client.request(route, None, json={
                 "content": f"<@{self._config.alert_webhook.target_user}> your code sucks: {paste_url}"
             })
