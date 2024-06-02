@@ -462,9 +462,16 @@ async def get_timeseries_stats_for_user(request: web.Request) -> web.StreamRespo
 
     user_id = request.match_info["user_id"]
 
+    # Check if user exists
+    result = await database.execute("select count(*) from users where id = ?", [user_id])
+    row = await result.fetchone()
+    assert row is not None
+    if row[0] == 0:
+        return web.json_response({"code": APIErrorCode.USER_NOT_FOUND, "detail": "user not found/not scraped yet."})
 
-    raw_before_timestamp = request.query.getone("before")
-    raw_after_timestamp = request.query.getone("after")
+
+    raw_before_timestamp = request.query.getone("before", None)
+    raw_after_timestamp = request.query.getone("after", None)
 
     if raw_before_timestamp is not None and raw_after_timestamp is not None:
         return web.json_response({"code": APIErrorCode.MUTUALLY_EXCLUSIVE_QUERY_PARAMETERS, "detail": "you can only pass before or after, not both"}, status=400)
@@ -488,27 +495,18 @@ async def get_timeseries_stats_for_user(request: web.Request) -> web.StreamRespo
         except ValueError as error:
             return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": f"failed to parse the before parameter: {error}", "field": "before"}, status=400)
 
-        rows = await quest_db.fetch("select timestamp, count from user_count where timestamp < $1 order by timestamp desc limit $2", before_timestamp, limit)
+        rows = await quest_db.fetch("select timestamp from user_stats where timestamp < $1 order by timestamp desc limit $2", before_timestamp, limit)
     elif raw_after_timestamp is not None:
         try:
             after_timestamp = datetime.fromtimestamp(float(raw_after_timestamp))
         except ValueError as error:
             return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": f"failed to parse the after parameter: {error}", "field": "before"}, status=400)
 
-        rows = await quest_db.fetch("select timestamp, count from user_count where timestamp > $1 order by timestamp asc limit $2", after_timestamp, limit)
+        rows = await quest_db.fetch("select timestamp from user_stats where timestamp > $1 order by timestamp asc limit $2", after_timestamp, limit)
     else:
-        rows = await quest_db.fetch("select timestamp, count from user_count order by timestamp desc limit $1", limit)
+        rows = await quest_db.fetch("select timestamp from user_stats order by timestamp desc limit $1", limit)
 
     
-    # Check if user exists
-    result = await database.execute("select count(*) from users where id = ?", [user_id])
-    row = await result.fetchone()
-    assert row is not None
-    if row[0] == 0:
-        return web.json_response({"code": APIErrorCode.USER_NOT_FOUND, "detail": "user not found/not scraped yet."})
-
-    # Get scrape times
-    rows = await quest_db.fetch("select timestamp from user_stats where user_id = $1 and code='game-seconds' and timestamp between $2 and $3 order by timestamp desc limit $4", user_id, after_timestamp, before_timestamp, limit)
 
     items = []
     for row in rows:

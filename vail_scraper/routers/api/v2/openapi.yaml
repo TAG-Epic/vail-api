@@ -16,7 +16,7 @@ servers:
   - description: "Production"
     url: "https://vail-scraper.farfrom.world/api/v2"
   - description: "Local instance"
-    url: "http://localhost:8000"
+    url: "http://localhost:8000/api/v2"
 tags:
   - name: "users"
     description: "Information about users"
