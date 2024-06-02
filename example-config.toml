@@ -13,6 +13,10 @@ password = ""
 [bans]
 accelbyte = false
 
-[database]
-sqlite_url = "/opt/data/db.sqlite"
-quest_url = "http://questdb:9000"
+[database.sqlite]
+url = "/opt/data/db.sqlite"
+[database.quest]
+http_url = "http://questdb:9000"
+postgres_url = "postgres://admin:quest@questdb:"
+[database.meilisearch]
+url = "http://melisearch:7700"

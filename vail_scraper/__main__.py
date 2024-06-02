@@ -5,6 +5,8 @@ import aiosqlite
 from aiohttp import web
 import asyncpg
 
+from vail_scraper.database.meilisearch import MeiliSearch
+
 from .client.accelbyte import AccelByteClient
 from .client.epic_games import EpicGamesClient
 from .database.quest import QuestDBWrapper
@@ -35,15 +37,16 @@ async def main() -> None:
     config = load_config()
     database_lock = ExclusiveLock()
 
-    database = await aiosqlite.connect(config.database.sqlite_url)
+    database = await aiosqlite.connect(config.database.sqlite.url)
     database.row_factory = aiosqlite.Row
     _logger.info("doing migrations")
     await do_migrations(database)
 
     app[app_keys.CONFIG] = config
     app[app_keys.DATABASE] = database
-    app[app_keys.QUEST_DB] = QuestDBWrapper(config.database.quest_url)
-    app[app_keys.QUEST_DB_POSTGRES] = await asyncpg.create_pool(config.database.quest_postgres_url)
+    app[app_keys.QUEST_DB] = QuestDBWrapper(config.database.quest.http_url)
+    app[app_keys.QUEST_DB_POSTGRES] = await asyncpg.create_pool(config.database.quest.postgres_url)
+    app[app_keys.MEILISEARCH] = MeiliSearch(config.database.meilisearch.url)
     app[app_keys.ACCEL_BYTE_CLIENT] = AccelByteClient(config)
     app[app_keys.EPIC_GAMES_CLIENT] = EpicGamesClient(config)
     app[app_keys.SCRAPER] = VailScraper(
@@ -52,6 +55,7 @@ async def main() -> None:
         app[app_keys.QUEST_DB],
         app[app_keys.ACCEL_BYTE_CLIENT],
         app[app_keys.EPIC_GAMES_CLIENT],
+        app[app_keys.MEILISEARCH],
         config,
     )
     app[app_keys.DATABASE_LOCK] = database_lock

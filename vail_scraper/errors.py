@@ -18,6 +18,7 @@ class APIErrorCode(StrEnum):
     RATE_LIMITED = "rate_limited"
     QUERY_PARAMETER_INVALID = "query_parameter_invalid"
     MUTUALLY_EXCLUSIVE_QUERY_PARAMETERS = "mutually_exclusive_query_parameters"
+    MISSING_QUERY_PARAMETER = "missing_query_parameter"
 
 
 class AccelByteErrorCode(IntEnum):
@@ -27,6 +28,7 @@ class AccelByteErrorCode(IntEnum):
 
 class Service(StrEnum):
     ACCELBYTE = "accelbyte"
+    MEILISEARCH = "meilisearch"
     UNKNOWN = "unknown"
 
     @staticmethod

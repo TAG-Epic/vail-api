@@ -9,8 +9,8 @@ import traceback
 from slowstack.asynchronous.times_per import TimesPerRateLimiter
 from nextcore.http import HTTPClient, Route
 
-from vail_scraper.utils.unique_queue import UniqueQueue
-
+from .models.meilisearch import SearchIndex
+from .utils.unique_queue import UniqueQueue
 from .database.quest import QuestDBWrapper
 from .models.accelbyte import AccelBytePlayerInfo, AccelByteStatCode
 from .client.accelbyte import AccelByteClient
@@ -19,6 +19,7 @@ from .utils.circuit_breaker import CircuitBreaker
 from .utils.exclusive_lock import ExclusiveLock
 from .config import ScraperConfig
 from .errors import ExternalServiceError
+from .database.meilisearch import MeiliSearch
 
 _logger = getLogger(__name__)
 
@@ -31,6 +32,7 @@ class VailScraper:
         quest_db: QuestDBWrapper,
         accel_byte_client: AccelByteClient,
         epic_games_client: EpicGamesClient,
+        meilisearch: MeiliSearch,
         config: ScraperConfig,
     ) -> None:
         self._rate_limiter: TimesPerRateLimiter = TimesPerRateLimiter(
@@ -42,8 +44,9 @@ class VailScraper:
         self._quest_db: QuestDBWrapper = quest_db
         self._accel_byte_client: AccelByteClient = accel_byte_client
         self._epic_games_client: EpicGamesClient = epic_games_client
-        self._discord_client: HTTPClient = HTTPClient()
         self._config: ScraperConfig = config
+        self._meilisearch: MeiliSearch = meilisearch
+        self._discord_client: HTTPClient = HTTPClient()
 
         # Accel fast
         self._user_ids_pending_scrape: UniqueQueue[str] = UniqueQueue()
@@ -101,7 +104,9 @@ class VailScraper:
                 started_post_scrape = time.time()
 
                 # Find users not spotted (aka moved up ranking while we checked)
-                result = await self._database.execute("select id from users")
+                result = await self._database.execute("select id, name from users")
+
+                chunk: list[typing.Any] = []
 
                 async for row in self._chunk_aiosqlite_response(result):
                     user_id = row[0]
@@ -110,9 +115,17 @@ class VailScraper:
                         _logger.debug("didn't spot %s during leaderboard scrape, checking just to make sure!", user_id)
                         self._user_ids_pending_scrape.add(user_id)
 
+                    chunk.append(row)
+                    if len(chunk) == 1000:
+                        await self._meilisearch.ingest_documents("users", "id", [{"id": user[0], "name": user[1]} for user in chunk])
+                        chunk.clear()
+
                     # Since we are going over quite a lot of rows, we chunk it and do frequent asyncio context switches to lighten the load
                     await asyncio.sleep(0)
-
+                
+                if len(chunk) != 0:
+                    await self._meilisearch.ingest_documents(SearchIndex.USERS, "id", [{"id": user[0], "name": user[1]} for user in chunk])
+                    chunk.clear()
 
                 if len(total_outdated_user_ids) == 0:
                     _logger.debug("no updates, sleeping for 10s")

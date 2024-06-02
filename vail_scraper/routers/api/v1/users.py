@@ -1,5 +1,6 @@
 from aiohttp import web
 
+from ....models.meilisearch import SearchIndex
 from ....errors import APIErrorCode
 from .... import app_keys
 from ....utils.cors import api_cors
@@ -7,10 +8,10 @@ from ....utils.cors import api_cors
 router = web.RouteTableDef()
 
 
-@router.get("/api/v1/users/search")
+@router.get("/api/v2/users/search")
 @api_cors
 async def search_user(request: web.Request) -> web.StreamResponse:
-    database = request.app[app_keys.DATABASE]
+    meilisearch = request.app[app_keys.MEILISEARCH]
 
     if "name" not in request.query:
         return web.json_response(
@@ -22,26 +23,10 @@ async def search_user(request: web.Request) -> web.StreamResponse:
         )
 
     name = request.query["name"]
-    escaped_name = name.replace("%", "\\%").replace("_", "\\_")
 
-    result = await database.execute(
-        """
-        select id, name
-        from users where
-        name like ? or
-        name like ? or
-        name like ? or
-        name = ?
-        limit 50
-        """,
-        [f"%{escaped_name}%", f"%{escaped_name}", f"{escaped_name}%", name],
-    )
-    rows = await result.fetchall()
+    results = await meilisearch.search(SearchIndex.USERS, name)
 
-    data = {"items": []}
-
-    for row in rows:
-        data["items"].append({"id": row["id"], "name": row["name"]})
+    data = {"items": results.hits}
 
     return web.json_response(data)
 

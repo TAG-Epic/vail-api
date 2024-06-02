@@ -19,11 +19,20 @@ class ScraperUserConfig(BaseModel):
 class BansConfig(BaseModel):
     accelbyte: bool = False
 
+class SqliteConfig(BaseModel):
+    url: str
+
+class QuestConfig(BaseModel):
+    http_url: str
+    postgres_url: str
+
+class MeiliSearchConfig(BaseModel):
+    url: str
 
 class DatabaseConfig(BaseModel):
-    sqlite_url: str
-    quest_url: str
-    quest_postgres_url: str
+    sqlite: SqliteConfig
+    quest: QuestConfig
+    meilisearch: MeiliSearchConfig
 
 class WebhookAlertConfig(BaseModel):
     id: int
