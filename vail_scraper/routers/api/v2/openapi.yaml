@@ -208,6 +208,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserNotFoundError"
+        "400":
+           description: "You did something stupid"
+           content:
+             application/json:
+               schema:
+                 oneOf:
+                   - $ref: "#/components/schemas/QueryParamInvalidError"
+                   - $ref: "#/components/schemas/MutuallyExclusiveQueryParametersError"
   /game/user-count:
     get:
       operationId: "getGameUserCount"
@@ -313,6 +321,7 @@ paths:
                schema:
                  oneOf:
                    - $ref: "#/components/schemas/QueryParamInvalidError"
+                   - $ref: "#/components/schemas/MutuallyExclusiveQueryParametersError"
                    
              
 components:
@@ -1074,4 +1083,17 @@ components:
           example: "failed to parse the after parameter"
         field:
           type: "string"
+    MutuallyExclusiveQueryParametersError:
+      type: "object"
+      required:
+        - "code"
+        - "detail"
+      properties:
+        code:
+          type: "string"
+          enum:
+            - "mutually_exclusive_query_parameters"
+        detail:
+          type: "string"
+          example: "the before and after query parameters are mutually exclusive"
 
