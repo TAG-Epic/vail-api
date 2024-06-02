@@ -439,8 +439,6 @@ def format_user_stats(user_stats: dict[str, float]):
 @rate_limit_http(lambda: TimesPerRateLimiter(5, 5))
 async def get_stats_for_user(request: web.Request) -> web.StreamResponse:
     vail_client = request.app[app_keys.ACCEL_BYTE_CLIENT]
-    database = request.app[app_keys.DATABASE]
-    database_lock = request.app[app_keys.DATABASE_LOCK]
 
     user_id = request.match_info["user_id"]
 
@@ -452,33 +450,6 @@ async def get_stats_for_user(request: web.Request) -> web.StreamResponse:
             {"detail": "user not found", "code": APIErrorCode.USER_NOT_FOUND},
             status=410,
         )
-
-    # Store to DB
-    scraped_at = time.time()
-    async with database_lock.shared():
-        await database.executemany(
-            "insert or replace into stats (code, user_id, value, updated_at) values (?, ?, ?, ?)",
-            [
-                (stat_code, user_id, value, scraped_at)
-                for stat_code, value in user_stats.items()
-            ],
-        )
-
-    # Removed stat codes
-    result = await database.execute(
-        "select code from stats where user_id = ?", [user_id]
-    )
-    removed_stat_codes = []
-    for row in await result.fetchall():
-        stat_code = row[0]
-        if stat_code not in user_stats.keys():
-            removed_stat_codes.append(stat_code)
-
-    await database.executemany(
-        "delete from stats where user_id = ? and code = ?",
-        [(user_id, removed_stat_code) for removed_stat_code in removed_stat_codes],
-    )
-    await database.commit()
 
     # Generate stats
     return web.json_response(format_user_stats(user_stats))
