@@ -24,22 +24,14 @@ async def get_user_count(request: web.Request) -> web.StreamResponse:
 @api_cors
 async def get_user_count_time_series(request: web.Request) -> web.StreamResponse:
     db = request.app[app_keys.QUEST_DB_POSTGRES]
-    
-    try:
-        before_timestamp = datetime.fromtimestamp(float(request.query.getone("before", "0")))
-    except ValueError as error:
-        return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": f"failed to parse the before parameter: {error}", "field": "before"}, status=400)
-    
-    try:
-        after_timestamp = datetime.fromtimestamp(float(request.query.getone("after")))
-    except KeyError:
-        after_timestamp = datetime.utcnow()
-    except ValueError as error:
-        return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": f"failed to parse the after parameter: {error}", "field": "after"}, status=400)
 
-    if before_timestamp > after_timestamp:
-        return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": "before was later than after. Did you swap them around?", "field": "before"}, status=400)
+    raw_before_timestamp = request.query.getone("before")
+    raw_after_timestamp = request.query.getone("after")
+
+    if raw_before_timestamp is not None and raw_after_timestamp is not None:
+        return web.json_response({"code": APIErrorCode.MUTUALLY_EXCLUSIVE_QUERY_PARAMETERS, "detail": "you can only pass before or after, not both"}, status=400)
     
+    # Limit
     try:
         limit = int(request.query.getone("limit"))
     except KeyError:
@@ -52,7 +44,23 @@ async def get_user_count_time_series(request: web.Request) -> web.StreamResponse
     if limit > 100:
         return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": "the limit parameter must not be more than 100", "field": "limit"}, status=400)
 
-    rows = await db.fetch("select timestamp, count from user_count where timestamp between $1 and $2 order by timestamp desc limit $3", after_timestamp, before_timestamp, limit)
+    if raw_before_timestamp is not None:
+        try:
+            before_timestamp = datetime.fromtimestamp(float(raw_before_timestamp))
+        except ValueError as error:
+            return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": f"failed to parse the before parameter: {error}", "field": "before"}, status=400)
+
+        rows = await db.fetch("select timestamp, count from user_count where timestamp < $1 order by timestamp desc limit $2", before_timestamp, limit)
+    elif raw_after_timestamp is not None:
+        try:
+            after_timestamp = datetime.fromtimestamp(float(raw_after_timestamp))
+        except ValueError as error:
+            return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": f"failed to parse the after parameter: {error}", "field": "before"}, status=400)
+
+        rows = await db.fetch("select timestamp, count from user_count where timestamp > $1 order by timestamp asc limit $2", after_timestamp, limit)
+    else:
+        rows = await db.fetch("select timestamp, count from user_count order by timestamp desc limit $1", limit)
+    
 
     items = []
 

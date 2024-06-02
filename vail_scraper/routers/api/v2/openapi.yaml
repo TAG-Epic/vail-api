@@ -141,8 +141,16 @@ paths:
           # Info
           Get someone's quick play stats from back in time
           
-          # Notice
+          # What stats are tracked
           This doesn't count customs.
+          
+          # Sorting of response items
+          Providing `after`: lowest matching timestamp -> highest
+        
+          Providing `before`: highest matching timestamp -> lowest
+        
+          Providing nothing: most recent scrape -> oldest scrape
+        
 
           # Rate limits
           This endpoint is currently not rate limited.
@@ -156,11 +164,19 @@ paths:
             $ref: "#/components/schemas/UserId"
         - name: "before"
           in: "query"
+          description: |
+            This is mutually exclusive with `after`
+            
+            **NOTE** Please read the request description regarding sorting
           schema:
             $ref: "#/components/schemas/Timestamp"
             description: "if not sent this will default to the current timestamp"
         - name: "after"
           in: "query"
+          description: |
+            This is mutually exclusive with `before`
+            
+            **NOTE** Please read the request description regarding sorting
           schema:
             $ref: "#/components/schemas/Timestamp"
             default: 0
@@ -230,14 +246,21 @@ paths:
       summary: "Get how many users vail has over time"
       description: |
         # Info
-        Get how many people have a account on vail
+        Get how many people have a account on VAIL
         
-        # Notice
+        # What counts as a VAIL user?
         This only counts people who have started vail once.
         
         Users who use family sharing will get one account counted per "account" in the family share
         
         Users who create "full" accounts through https://login.vailvr.com will only count once despite being on steam and oculus.
+        
+        # Sorting of response items
+        Providing `after`: lowest matching timestamp -> highest
+        
+        Providing `before`: highest matching timestamp -> lowest
+        
+        Providing nothing: most recent scrape -> oldest scrape
         
         # Rate limits
         This endpoint is currently not rate limited.
@@ -245,12 +268,20 @@ paths:
       
       parameters:
         - name: "before"
+          description: |
+            This is mutually exclusive with `after`
+            
+            **NOTE** Please read the request description regarding sorting
           in: "query"
           schema:
             $ref: "#/components/schemas/Timestamp"
             description: "if not sent this will default to the current timestamp"
         - name: "after"
           in: "query"
+          description: |
+            This is mutually exclusive with `before`
+            
+            **NOTE** Please read the request description regarding sorting
           schema:
             $ref: "#/components/schemas/Timestamp"
             default: 0

@@ -17,6 +17,7 @@ class APIErrorCode(StrEnum):
     USER_NOT_FOUND = "user_not_found"
     RATE_LIMITED = "rate_limited"
     QUERY_PARAMETER_INVALID = "query_parameter_invalid"
+    MUTUALLY_EXCLUSIVE_QUERY_PARAMETERS = "mutually_exclusive_query_parameters"
 
 
 class AccelByteErrorCode(IntEnum):
