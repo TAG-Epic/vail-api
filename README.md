@@ -1,6 +1,6 @@
 # Vail community API
 > [!IMPORTANT]  
-> DO NOT RUN THIS! Use https://vail-scraper.farfrom.world/ instead so we don't waste AEXLAB's server capacity.
+> DO NOT RUN THIS! Use https://vail-api.farfrom.world/ instead so we don't waste AEXLAB's server capacity.
 
 A bot-friendly Vail API
 
