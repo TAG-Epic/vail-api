@@ -495,7 +495,7 @@ async def get_timeseries_stats_for_user(request: web.Request) -> web.StreamRespo
         except ValueError as error:
             return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": f"failed to parse the before parameter: {error}", "field": "before"}, status=400)
 
-        rows = await quest_db.fetch("select timestamp from user_stats where timestamp < $1 order by timestamp desc limit $2", before_timestamp, limit)
+        rows = await quest_db.fetch("select timestamp from user_stats where code=$1 timestamp < $2 order by timestamp desc limit $3", "game-seconds", before_timestamp, limit)
     elif raw_after_timestamp is not None:
         try:
             after_timestamp = datetime.fromtimestamp(float(raw_after_timestamp))
