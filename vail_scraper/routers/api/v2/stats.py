@@ -2,6 +2,8 @@ from logging import getLogger
 import time
 from typing import Any
 from datetime import datetime
+import typing
+import asyncio
 
 from aiohttp import web
 from slowstack.asynchronous.times_per import TimesPerRateLimiter
@@ -502,24 +504,25 @@ async def get_timeseries_stats_for_user(request: web.Request) -> web.StreamRespo
         except ValueError as error:
             return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": f"failed to parse the after parameter: {error}", "field": "before"}, status=400)
 
-        rows = await quest_db.fetch("select timestamp from user_stats where timestamp > $1 order by timestamp asc limit $2", after_timestamp, limit)
+        rows = await quest_db.fetch("select timestamp from user_stats where code=$1 timestamp > $2 order by timestamp asc limit $3", "game-seconds", after_timestamp, limit)
     else:
-        rows = await quest_db.fetch("select timestamp from user_stats order by timestamp desc limit $1", limit)
+        rows = await quest_db.fetch("select timestamp from user_stats where code=$1 order by timestamp desc limit $2", "game-seconds", limit)
 
-    
+    timestamps = set([row[0] for row in rows]) # just in case
 
-    items = []
-    for row in rows:
-        timestamp = row[0]
-        
-        stats = {}
-        rows = await quest_db.fetch("select code, value from user_stats where user_id = $1 and timestamp = $2", user_id, timestamp)
-
-        for row in rows:
-            stats[row[0]] = row[1]
-        
-        formatted = format_user_stats(stats)
-        formatted["timestamp"] = str(timestamp.timestamp())
-        items.append(formatted)
+    items = await asyncio.gather(*[get_stat_snapshot(request, user_id, timestamp) for timestamp in timestamps])
 
     return web.json_response({"items": items})
+
+async def get_stat_snapshot(request: web.Request, user_id: str, timestamp: datetime):
+    quest_db = request.app[app_keys.QUEST_DB_POSTGRES]
+
+    stats = {}
+    rows = await quest_db.fetch("select code, value from user_stats where user_id = $1 and timestamp = $2", user_id, timestamp)
+
+    for row in rows:
+        stats[row[0]] = row[1]
+    
+    formatted = format_user_stats(stats)
+    formatted["timestamp"] = str(timestamp.timestamp())
+    return formatted
