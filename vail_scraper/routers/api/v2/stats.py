@@ -510,7 +510,6 @@ async def get_timeseries_stats_for_user(request: web.Request) -> web.StreamRespo
         rows = await quest_db.fetch("select timestamp from user_stats where user_id = $1 and code=$2 order by timestamp desc limit $3", user_id, "game-seconds", limit)
 
     timestamps = set([row[0] for row in rows]) # just in case
-    print(timestamps.pop())
 
     items = await asyncio.gather(*[get_stat_snapshot(request, user_id, timestamp) for timestamp in timestamps])
 
