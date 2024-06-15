@@ -462,6 +462,7 @@ async def get_timeseries_stats_for_user(request: web.Request) -> web.StreamRespo
     database = request.app[app_keys.DATABASE]
     quest_db = request.app[app_keys.QUEST_DB_POSTGRES]
 
+
     user_id = request.match_info["user_id"]
 
     # Check if user exists
@@ -497,18 +498,19 @@ async def get_timeseries_stats_for_user(request: web.Request) -> web.StreamRespo
         except ValueError as error:
             return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": f"failed to parse the before parameter: {error}", "field": "before"}, status=400)
 
-        rows = await quest_db.fetch("select timestamp from user_stats where code=$1 timestamp < $2 order by timestamp desc limit $3", "game-seconds", before_timestamp, limit)
+        rows = await quest_db.fetch("select timestamp from user_stats where user_id = $1 and code = $2 and timestamp < $3 order by timestamp desc limit $4", user_id, "game-seconds", before_timestamp, limit)
     elif raw_after_timestamp is not None:
         try:
             after_timestamp = datetime.fromtimestamp(float(raw_after_timestamp))
         except ValueError as error:
             return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": f"failed to parse the after parameter: {error}", "field": "before"}, status=400)
 
-        rows = await quest_db.fetch("select timestamp from user_stats where code=$1 timestamp > $2 order by timestamp asc limit $3", "game-seconds", after_timestamp, limit)
+        rows = await quest_db.fetch("select timestamp from user_stats where user_id = $1 and code = $2 and timestamp > $3 order by timestamp asc limit $4", user_id, "game-seconds", after_timestamp, limit)
     else:
-        rows = await quest_db.fetch("select timestamp from user_stats where code=$1 order by timestamp desc limit $2", "game-seconds", limit)
+        rows = await quest_db.fetch("select timestamp from user_stats where user_id = $1 and code=$2 order by timestamp desc limit $3", user_id, "game-seconds", limit)
 
     timestamps = set([row[0] for row in rows]) # just in case
+    print(timestamps.pop())
 
     items = await asyncio.gather(*[get_stat_snapshot(request, user_id, timestamp) for timestamp in timestamps])
 
@@ -516,12 +518,14 @@ async def get_timeseries_stats_for_user(request: web.Request) -> web.StreamRespo
 
 async def get_stat_snapshot(request: web.Request, user_id: str, timestamp: datetime):
     quest_db = request.app[app_keys.QUEST_DB_POSTGRES]
+    print(timestamp)
 
     stats = {}
     rows = await quest_db.fetch("select code, value from user_stats where user_id = $1 and timestamp = $2", user_id, timestamp)
 
     for row in rows:
         stats[row[0]] = row[1]
+    
     
     formatted = format_user_stats(stats)
     formatted["timestamp"] = str(timestamp.timestamp())
