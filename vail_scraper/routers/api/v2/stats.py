@@ -506,6 +506,7 @@ async def get_timeseries_stats_for_user(request: web.Request) -> web.StreamRespo
             return web.json_response({"code": APIErrorCode.QUERY_PARAMETER_INVALID, "detail": f"failed to parse the after parameter: {error}", "field": "before"}, status=400)
 
         rows = await quest_db.fetch("select timestamp from user_stats where user_id = $1 and code = $2 and timestamp > $3 order by timestamp asc limit $4", user_id, "game-seconds", after_timestamp, limit)
+        rows = reversed(rows)
     else:
         rows = await quest_db.fetch("select timestamp from user_stats where user_id = $1 and code=$2 order by timestamp desc limit $3", user_id, "game-seconds", limit)
 
@@ -517,7 +518,6 @@ async def get_timeseries_stats_for_user(request: web.Request) -> web.StreamRespo
 
 async def get_stat_snapshot(request: web.Request, user_id: str, timestamp: datetime):
     quest_db = request.app[app_keys.QUEST_DB_POSTGRES]
-    print(timestamp)
 
     stats = {}
     rows = await quest_db.fetch("select code, value from user_stats where user_id = $1 and timestamp = $2", user_id, timestamp)
