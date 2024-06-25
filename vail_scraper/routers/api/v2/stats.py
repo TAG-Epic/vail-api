@@ -431,7 +431,15 @@ def format_user_stats(user_stats: dict[str, float]):
                     user_stats.get(AccelByteStatCode.GAMES_ABANDONED, 0)
                 ),
             },
-            "prestige": int(user_stats.get(AccelByteStatCode.PRESTIGE, 0))
+            "prestige": int(user_stats.get(AccelByteStatCode.PRESTIGE, 0)),
+            "xp": {
+                "total": {
+                    "value": int(user_stats.get(AccelByteStatCode.SCORE, 0))
+                },
+                "current_prestige": {
+                    "value": int(user_stats.get(AccelByteStatCode.XP, 0)) 
+                }
+            }
         },
     }
 
