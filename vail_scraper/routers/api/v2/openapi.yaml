@@ -1024,6 +1024,26 @@ components:
                type: "number"
         prestige:
           type: "number"
+        xp:
+          type: "object"
+          required:
+            - "total"
+            - "current_prestige"
+          properties:
+            total:
+              type: "object"
+              required:
+                - "value"
+              properties:
+                value:
+                  type: "integer"
+            current_prestige:
+              type: "object"
+              required:
+                - "value"
+              properties:
+                value:
+                  type: "integer"
 
               
     # User count
